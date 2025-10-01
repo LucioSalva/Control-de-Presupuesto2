@@ -148,7 +148,7 @@ function renderAll(){
   renderChartMensual(STATE.gastos, filtros);
 
   // Reconducciones
-  renderRecon(STATE.recon);
+  renderMovimientos(); 
 
   // Persistir
   saveLS();
@@ -182,15 +182,25 @@ function renderMissing(rows){
   });
 }
 
-function renderRecon(rows){
-  const tbody = document.querySelector('#tabla-recon tbody');
+function renderMovimientos(){
+  const tbody = document.querySelector('#tabla-movs tbody');
+  if (!tbody) return;
   tbody.innerHTML = '';
-  rows.forEach(r => {
+
+  const movs = buildMovimientos();
+  movs.forEach(m => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${escapeHtml(r.concepto||'')}</td><td>${escapeHtml(r.partida||'')}</td><td class="text-end">${money(r.monto)}</td>`;
+    tr.innerHTML = `
+      <td class="fw-semibold">${m.tipo}</td>
+      <td>${escapeHtml(m.concepto)}</td>
+      <td>${escapeHtml(m.origen)}</td>
+      <td>${escapeHtml(m.destino)}</td>
+      <td class="text-end">${money(m.monto)}</td>
+    `;
     tbody.appendChild(tr);
   });
 }
+
 
 function renderChartMensual(gastos, filtros){
   const byMonth = new Array(12).fill(0);
@@ -218,6 +228,40 @@ function renderChartMensual(gastos, filtros){
     }
   });
 }
+
+function buildMovimientos(){
+  const movs = [];
+
+  // Reconducciones
+  STATE.recon.forEach(r => {
+    movs.push({
+      tipo: 'Reconducción',
+      concepto: r.concepto || '—',
+      origen: r.origen || '',
+      destino: r.destino || '',
+      monto: Number(r.monto) || 0,
+      ts: 0 // sin fecha; si luego agregas created_at, úsalo aquí
+    });
+  });
+
+  // Gastos
+  STATE.gastos.forEach(g => {
+    const ts = g.fecha instanceof Date ? g.fecha.getTime() : 0;
+    movs.push({
+      tipo: 'Gasto',
+      concepto: g.descripcion || '—',
+      origen: '',
+      destino: g.partida && g.partida.trim() ? g.partida.trim() : '(sin partida)',
+      monto: Number(g.monto) || 0,
+      ts
+    });
+  });
+
+  // más recientes primero (si hay fecha en gastos)
+  movs.sort((a,b) => b.ts - a.ts);
+  return movs;
+}
+
 
 document.getElementById('form-partida').addEventListener('submit', async (ev)=>{
   ev.preventDefault();

@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="es">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -11,24 +12,38 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 </head>
+
 <body>
-  <nav class="navbar navbar-expand-lg navbar-dark shadow-sm">
-    <div class="container-fluid">
-      <a class="navbar-brand fw-semibold" href="#"><i class="bi bi-graph-up-arrow me-2"></i>Control Presupuestal</a>
-      <div class="ms-auto d-flex gap-2 align-items-center">
-        <button id="btn-demo" class="btn btn-primary btn-sm"><i class="bi bi-rocket-takeoff me-1"></i>Demo</button>
-        <div class="btn-group">
-          <button id="btn-export-json" class="btn btn-outline-light btn-sm"><i class="bi bi-download me-1"></i>Exportar JSON</button>
-          <label class="btn btn-outline-light btn-sm mb-0">
-            <i class="bi bi-upload me-1"></i>Importar JSON
-            <input id="file-import-json" type="file" accept="application/json" hidden>
-          </label>
-        </div>
-        <button id="btn-reset" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash3 me-1"></i>Reiniciar</button>
-      </div>
+ <nav class="navbar navbar-expand-lg navbar-dark shadow-sm">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-semibold" href="#"><i class="bi bi-graph-up-arrow me-2"></i>Control Presupuestal</a>
+
+    <div class="ms-auto d-flex gap-2 align-items-center">
+      <!-- ID de proyecto -->
+      <input id="proj-general" class="form-control form-control-sm" placeholder="ID general (ej. 1)" style="width: 140px;">
+      <input id="proj-code" class="form-control form-control-sm" placeholder="ID proyecto (ej. A001...)" style="width: 280px;">
+
+      <!-- Exportar Excel -->
+      <button id="btn-export-xlsx" class="btn btn-outline-light btn-sm">
+        <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+      </button>
+
+      <!-- Guardar en BD -->
+      <button id="btn-save" class="btn btn-success btn-sm">
+        <i class="bi bi-cloud-check me-1"></i>Guardar
+      </button>
+
+      <!-- Reiniciar (solo UI/local) -->
+      <button id="btn-reset" class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-trash3 me-1"></i>Reiniciar
+      </button>
     </div>
-  </nav>
+  </div>
+</nav>
+
 
   <main class="container py-4">
     <div id="alert-zone"></div>
@@ -105,7 +120,8 @@
                 <input type="number" step="0.01" class="form-control" id="p-monto" placeholder="20000000" required>
               </div>
               <div class="col-12 d-grid">
-                <button class="btn btn-success" type="submit"><i class="bi bi-plus-circle me-1"></i>Agregar/Actualizar</button>
+                <button class="btn btn-success" type="submit"><i
+                    class="bi bi-plus-circle me-1"></i>Agregar/Actualizar</button>
               </div>
             </form>
           </div>
@@ -139,35 +155,38 @@
         </div>
 
         <!-- Reconducciones -->
-<div class="card"><div class="card-body">
-  <h6 class="mb-3">Reconducciones</h6>
-  <form id="form-recon" class="row g-2">
-    <div class="col-12">
-      <label class="form-label">Concepto (opcional)</label>
-      <input type="text" class="form-control" id="r-concepto" placeholder="Ej. Conmutador / UPS">
-    </div>
-    <div class="col-6">
-      <label class="form-label">De partida (origen)</label>
-      <input type="text" class="form-control" id="r-origen" placeholder="Partida" required>
-    </div>
-    <div class="col-6">
-      <label class="form-label">A partida (destino)</label>
-      <input type="text" class="form-control" id="r-destino" placeholder="Partida" required>
-    </div>
-    <div class="col-12">
-      <label class="form-label">Monto a mover</label>
-      <input type="number" step="0.01" class="form-control" id="r-monto" placeholder="Monto" required>
-    </div>
-    <div class="col-12 d-grid">
-      <button class="btn btn-success" type="submit">
-        <i class="bi bi-arrow-left-right me-1"></i> Aplicar reconducción
-      </button>
-    </div>
-  </form>
-  <small class="text-muted-2 d-block mt-2">
-    Si el destino no existe se crea automáticamente. Si el origen queda negativo se mostrará alerta y se marcará en rojo.
-  </small>
-</div></div>
+        <div class="card">
+          <div class="card-body">
+            <h6 class="mb-3">Reconducciones</h6>
+            <form id="form-recon" class="row g-2">
+              <div class="col-12">
+                <label class="form-label">Concepto (opcional)</label>
+                <input type="text" class="form-control" id="r-concepto" placeholder="Ej. Conmutador / UPS">
+              </div>
+              <div class="col-6">
+                <label class="form-label">De partida (origen)</label>
+                <input type="text" class="form-control" id="r-origen" placeholder="Partida" required>
+              </div>
+              <div class="col-6">
+                <label class="form-label">A partida (destino)</label>
+                <input type="text" class="form-control" id="r-destino" placeholder="Partida" required>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Monto a mover</label>
+                <input type="number" step="0.01" class="form-control" id="r-monto" placeholder="Monto" required>
+              </div>
+              <div class="col-12 d-grid">
+                <button class="btn btn-success" type="submit">
+                  <i class="bi bi-arrow-left-right me-1"></i> Aplicar reconducción
+                </button>
+              </div>
+            </form>
+            <small class="text-muted-2 d-block mt-2">
+              Si el destino no existe se crea automáticamente. Si el origen queda negativo se mostrará alerta y se
+              marcará en rojo.
+            </small>
+          </div>
+        </div>
 
       </div>
 
@@ -178,9 +197,12 @@
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h6 class="mb-0">Presupuesto por Partida</h6>
               <div class="d-flex align-items-center gap-2">
-                <input id="f-partida" type="text" class="form-control form-control-sm w-auto" placeholder="Filtrar partida">
-                <input id="f-buscar" type="text" class="form-control form-control-sm w-auto" placeholder="Buscar en descripción">
-                <button id="btn-aplicar" class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+                <input id="f-partida" type="text" class="form-control form-control-sm w-auto"
+                  placeholder="Filtrar partida">
+                <input id="f-buscar" type="text" class="form-control form-control-sm w-auto"
+                  placeholder="Buscar en descripción">
+                <button id="btn-aplicar" class="btn btn-primary btn-sm"><i
+                    class="bi bi-funnel me-1"></i>Filtrar</button>
                 <button id="btn-limpiar" class="btn btn-outline-light btn-sm">Quitar</button>
               </div>
             </div>
@@ -217,7 +239,8 @@
             </div>
             <div class="btn-group">
               <button id="btn-ver-missing" class="btn btn-sm btn-outline-info">Ver</button>
-              <button id="btn-export-missing" class="btn btn-sm btn-outline-success"><i class="bi bi-download me-1"></i>CSV</button>
+              <button id="btn-export-missing" class="btn btn-sm btn-outline-success"><i
+                  class="bi bi-download me-1"></i>CSV</button>
             </div>
           </div>
         </div>
@@ -230,15 +253,17 @@
         <div class="card">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="mb-0">Reconducciones</h6>
-              <small class="text-muted-2">Listado simple</small>
+              <h6 class="mb-0">Movimientos (Gastos y Reconducciones)</h6>
+              <small class="text-muted-2">Origen → Destino</small>
             </div>
             <div class="table-responsive" style="max-height:280px;">
-              <table class="table table-sm align-middle" id="tabla-recon">
+              <table class="table table-sm align-middle" id="tabla-movs">
                 <thead>
                   <tr>
-                    <th>Concepto</th>
-                    <th>Partida</th>
+                    <th>Tipo</th>
+                    <th>Concepto / Descripción</th>
+                    <th>Origen</th>
+                    <th>Destino</th>
                     <th class="text-end">Monto</th>
                   </tr>
                 </thead>
@@ -265,7 +290,9 @@
             <table class="table table-sm" id="tabla-missing">
               <thead>
                 <tr>
-                  <th>Fecha</th><th>Descripción</th><th>Monto</th>
+                  <th>Fecha</th>
+                  <th>Descripción</th>
+                  <th>Monto</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -273,7 +300,8 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button id="btn-export-missing-footer" class="btn btn-success"><i class="bi bi-download me-1"></i>Exportar CSV</button>
+          <button id="btn-export-missing-footer" class="btn btn-success"><i class="bi bi-download me-1"></i>Exportar
+            CSV</button>
           <button class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
         </div>
       </div>
@@ -287,4 +315,5 @@
   <script src="script.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>

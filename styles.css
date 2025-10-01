@@ -67,3 +67,10 @@ body * {
 .table thead th {
   font-weight: bold;
 }
+
+.table td:first-child {
+  white-space: nowrap;
+}
+.table td:first-child::before {
+  content: attr(data-pill);
+}

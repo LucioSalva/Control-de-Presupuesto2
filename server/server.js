@@ -1,7 +1,7 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import { query, getClient } from './db.js';
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import { query, getClient } from "./db.js";
 
 dotenv.config();
 const app = express();
@@ -13,87 +13,153 @@ app.use(express.json());
 /* ---------- Endpoints ---------- */
 
 // Salud
-app.get('/api/health', (_, res) => res.json({ ok: true }));
+app.get("/api/health", (_, res) => res.json({ ok: true }));
 
 // Partidas
-app.get('/api/partidas', async (_, res) => {
-  const { rows } = await query('SELECT clave, presupuesto FROM partidas ORDER BY clave');
+app.get("/api/partidas", async (_, res) => {
+  const { rows } = await query(
+    "SELECT clave, presupuesto FROM partidas ORDER BY clave"
+  );
   res.json(rows);
 });
 
-app.post('/api/partidas', async (req, res) => {
+app.post("/api/partidas", async (req, res) => {
   const { clave, presupuesto } = req.body;
-  if (!clave || isNaN(presupuesto)) return res.status(400).json({ error: 'Datos inválidos' });
-  await query(`
+  if (!clave || isNaN(presupuesto))
+    return res.status(400).json({ error: "Datos inválidos" });
+  await query(
+    `
     INSERT INTO partidas (clave, presupuesto)
     VALUES ($1, $2)
     ON CONFLICT (clave) DO UPDATE SET presupuesto = EXCLUDED.presupuesto
-  `, [clave, presupuesto]);
+  `,
+    [clave, presupuesto]
+  );
   res.json({ ok: true });
 });
 
 // Gastos
-app.get('/api/gastos', async (_, res) => {
-  const { rows } = await query('SELECT id, fecha, descripcion, partida_clave, monto FROM gastos ORDER BY COALESCE(fecha, CURRENT_DATE), id');
+app.get("/api/gastos", async (_, res) => {
+  const { rows } = await query(
+    "SELECT id, fecha, descripcion, partida_clave, monto FROM gastos ORDER BY COALESCE(fecha, CURRENT_DATE), id"
+  );
   res.json(rows);
 });
 
-app.post('/api/gastos', async (req, res) => {
+app.post("/api/gastos", async (req, res) => {
   const { fecha, descripcion, partida, monto } = req.body;
-  if (!descripcion || isNaN(monto)) return res.status(400).json({ error: 'Datos inválidos' });
+  if (!descripcion || isNaN(monto))
+    return res.status(400).json({ error: "Datos inválidos" });
   await query(
-    'INSERT INTO gastos (fecha, descripcion, partida_clave, monto) VALUES ($1, $2, $3, $4)',
-    [fecha || null, descripcion, (partida || '') || null, monto]
+    "INSERT INTO gastos (fecha, descripcion, partida_clave, monto) VALUES ($1, $2, $3, $4)",
+    [fecha || null, descripcion, partida || "" || null, monto]
   );
   res.json({ ok: true });
 });
 
 // Reconducción (transacción)
-app.post('/api/reconducir', async (req, res) => {
+app.post("/api/reconducir", async (req, res) => {
   const { concepto, origen, destino, monto } = req.body;
   if (!origen || !destino || !monto || isNaN(monto) || monto <= 0) {
-    return res.status(400).json({ error: 'Datos inválidos' });
+    return res.status(400).json({ error: "Datos inválidos" });
   }
 
   const client = await getClient();
   try {
-    await client.query('BEGIN');
+    await client.query("BEGIN");
 
     // Asegurar que existan origen/destino
-    await client.query('INSERT INTO partidas (clave, presupuesto) VALUES ($1, 0) ON CONFLICT (clave) DO NOTHING', [origen]);
-    await client.query('INSERT INTO partidas (clave, presupuesto) VALUES ($1, 0) ON CONFLICT (clave) DO NOTHING', [destino]);
+    await client.query(
+      "INSERT INTO partidas (clave, presupuesto) VALUES ($1, 0) ON CONFLICT (clave) DO NOTHING",
+      [origen]
+    );
+    await client.query(
+      "INSERT INTO partidas (clave, presupuesto) VALUES ($1, 0) ON CONFLICT (clave) DO NOTHING",
+      [destino]
+    );
 
     // Restar del origen y sumar al destino
-    await client.query('UPDATE partidas SET presupuesto = presupuesto - $1 WHERE clave = $2', [monto, origen]);
-    await client.query('UPDATE partidas SET presupuesto = presupuesto + $1 WHERE clave = $2', [monto, destino]);
+    await client.query(
+      "UPDATE partidas SET presupuesto = presupuesto - $1 WHERE clave = $2",
+      [monto, origen]
+    );
+    await client.query(
+      "UPDATE partidas SET presupuesto = presupuesto + $1 WHERE clave = $2",
+      [monto, destino]
+    );
 
     // Guardar histórico
     await client.query(
-      'INSERT INTO reconducciones (concepto, origen, destino, monto) VALUES ($1, $2, $3, $4)',
+      "INSERT INTO reconducciones (concepto, origen, destino, monto) VALUES ($1, $2, $3, $4)",
       [concepto || null, origen, destino, monto]
     );
 
     // Consultar presupuesto del origen para avisar si quedó negativo
-    const neg = await client.query('SELECT presupuesto FROM partidas WHERE clave = $1', [origen]);
+    const neg = await client.query(
+      "SELECT presupuesto FROM partidas WHERE clave = $1",
+      [origen]
+    );
 
-    await client.query('COMMIT');
+    await client.query("COMMIT");
 
     const presupuestoOrigen = neg.rows?.[0]?.presupuesto ?? 0;
     res.json({ ok: true, negativo: presupuestoOrigen < 0, presupuestoOrigen });
   } catch (e) {
-    await client.query('ROLLBACK');
+    await client.query("ROLLBACK");
     console.error(e);
-    res.status(500).json({ error: 'Error en reconducción' });
+    res.status(500).json({ error: "Error en reconducción" });
   } finally {
     client.release();
   }
 });
 
 // Histórico reconducciones
-app.get('/api/reconducciones', async (_, res) => {
-  const { rows } = await query('SELECT id, concepto, origen, destino, monto, created_at FROM reconducciones ORDER BY created_at DESC, id DESC');
+app.get("/api/reconducciones", async (_, res) => {
+  const { rows } = await query(
+    "SELECT id, concepto, origen, destino, monto, created_at FROM reconducciones ORDER BY created_at DESC, id DESC"
+  );
   res.json(rows);
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('API escuchando en http://localhost:' + PORT));
+app.listen(PORT, () =>
+  console.log("API escuchando en http://localhost:" + PORT)
+);
+
+function buildMovimientos() {
+  // Unimos reconducciones (tipo Reconducción) y gastos (tipo Gasto)
+  const movs = [];
+
+  // Reconducción: origen -> destino
+  STATE.recon.forEach((r) => {
+    movs.push({
+      tipo: "Reconducción",
+      concepto: r.concepto || "—",
+      origen: r.origen || "",
+      destino: r.destino || "",
+      monto: Number(r.monto) || 0,
+      // sin fecha por ahora (si agregas fecha, aquí la usaríamos)
+      ts: 0,
+    });
+  });
+
+  // Gasto: lo tratamos como destino = partida (si no hay partida, lo marcamos)
+  STATE.gastos.forEach((g) => {
+    const ts = g.fecha instanceof Date ? g.fecha.getTime() : 0;
+    movs.push({
+      tipo: "Gasto",
+      concepto: g.descripcion || "—",
+      origen: "", // gasto no tiene origen
+      destino:
+        g.partida && g.partida.trim() ? g.partida.trim() : "(sin partida)",
+      monto: Number(g.monto) || 0,
+      ts,
+    });
+  });
+
+  // Orden sugerido: por fecha si existe (gastos), luego por orden natural
+  // Descendente (más reciente primero):
+  movs.sort((a, b) => b.ts - a.ts);
+  return movs;
+}
+

@@ -7,7 +7,7 @@ const MES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','
 const LS_KEY = 'cp_app_data_v1';
 
 const STATE = {
-  // presupuesto: [{ partida, presupuesto, saldo }]
+  // presupuesto: [{ partida, presupuesto, saldo, gastado, recon, fechaGasto, fechaRecon }]
   presupuesto: [],
   // gastos: [{ fecha: Date|null, descripcion, partida, monto }]
   gastos: [],
@@ -65,11 +65,16 @@ async function loadFromAPI(){
   const qs = '?project=' + encodeURIComponent(project);
   const detalles = await apiGet('/api/detalles' + qs);
 
-  // Partidas (tabla principal)
+  // Partidas (tabla principal y gráficos)
   STATE.presupuesto = detalles.map(d => ({
     partida: d.partida,
     presupuesto: Number(d.presupuesto || 0),
-    saldo: Number(d.saldo_disponible || 0)
+    saldo: Number(d.saldo_disponible || 0),
+    gastado: Number(d.total_gastado || 0),
+    recon: Number(d.total_reconducido || 0),
+    // para el gráfico mensual (aprox por última fecha conocida)
+    fechaGasto: d.fecha_cuando_se_gasto ? new Date(d.fecha_cuando_se_gasto) : null,
+    fechaRecon: d.fecha_reconduccion ? new Date(d.fecha_reconduccion) : null
   }));
 
   // Gastos (a partir de los acumulados y la última fecha/desc si existe)
@@ -146,8 +151,8 @@ function renderAll(){
   document.getElementById('missing-alert').style.display = missing.length ? 'block' : 'none';
   renderMissing(missing);
 
-  // Chart mensual
-  renderChartMensual(STATE.gastos, filtros);
+  // Gráfica (nueva)
+  renderChart();
 
   // Movimientos
   renderMovimientos();
@@ -203,24 +208,93 @@ function renderMovimientos(){
   });
 }
 
-function renderChartMensual(gastos, filtros){
-  const byMonth = new Array(12).fill(0);
-  gastos.forEach(g => {
-    if (filtros.busca && !String(g.descripcion||'').toLowerCase().includes(filtros.busca)) return;
-    if (!g.fecha) return;
-    const m = g.fecha.getUTCMonth();
-    byMonth[m] += g.monto||0;
+/* ================== NUEVO: datasets para la gráfica ================== */
+function buildChartData(group){
+  // helper de dataset
+  const ds = (label, data) => ({ label, data, borderWidth: 1, backgroundColor: undefined });
+
+  if (group === 'global'){
+    const totalPres = STATE.presupuesto.reduce((a,b)=>a + (b.presupuesto||0), 0);
+    const totalGast = STATE.presupuesto.reduce((a,b)=>a + (b.gastado||0), 0);
+    const totalSaldo= STATE.presupuesto.reduce((a,b)=>a + (typeof b.saldo==='number'?b.saldo:0), 0);
+    const totalRecon= STATE.presupuesto.reduce((a,b)=>a + (b.recon||0), 0);
+    const labels = ['Total'];
+    return {
+      labels,
+      datasets: [
+        ds('Presupuesto', [totalPres]),
+        ds('Gastado',     [totalGast]),
+        ds('Saldo',       [totalSaldo]),
+        ds('Reconducido', [totalRecon]),
+      ]
+    };
+  }
+
+  if (group === 'partida'){
+    const labels = STATE.presupuesto.map(p => p.partida);
+    const pres = STATE.presupuesto.map(p => p.presupuesto||0);
+    const gast = STATE.presupuesto.map(p => p.gastado||0);
+    const sald = STATE.presupuesto.map(p => (typeof p.saldo==='number'?p.saldo:0));
+    const reco = STATE.presupuesto.map(p => p.recon||0);
+    return {
+      labels,
+      datasets: [
+        ds('Presupuesto', pres),
+        ds('Gastado',     gast),
+        ds('Saldo',       sald),
+        ds('Reconducido', reco),
+      ]
+    };
+  }
+
+  // group === 'mes'  (aproximación: usa última fecha conocida por partida)
+  const byMonth = {
+    pres: new Array(12).fill(0),   // opcional: línea constante de presupuesto anual
+    gast: new Array(12).fill(0),
+    reco: new Array(12).fill(0),
+  };
+
+  STATE.presupuesto.forEach(p => {
+    if (p.fechaGasto instanceof Date) {
+      byMonth.gast[p.fechaGasto.getUTCMonth()] += p.gastado||0;
+    }
+    if (p.fechaRecon instanceof Date) {
+      byMonth.reco[p.fechaRecon.getUTCMonth()] += p.recon||0;
+    }
   });
+
+  // Presupuesto anual como referencia mensual plana
+  const totalPres = STATE.presupuesto.reduce((a,b)=>a + (b.presupuesto||0), 0);
+  byMonth.pres = byMonth.pres.map(()=> totalPres);
+
+  return {
+    labels: MES,
+    datasets: [
+      ds('Presupuesto (anual)', byMonth.pres),
+      ds('Gastado',             byMonth.gast),
+      ds('Reconducido',         byMonth.reco),
+    ]
+  };
+}
+
+/* ================== NUEVO: render de la gráfica ================== */
+function renderChart(){
+  const group = (document.getElementById('chart-group')?.value || 'mes');
+  const stacked = !!document.getElementById('chart-stacked')?.checked;
+
+  const { labels, datasets } = buildChartData(group);
   const ctx = document.getElementById('chart-mensual');
+  if (!ctx) return;
   if (STATE.chart) STATE.chart.destroy();
+
   STATE.chart = new Chart(ctx, {
     type: 'bar',
-    data: { labels: MES, datasets: [{ label: 'Gasto', data: byMonth }] },
+    data: { labels, datasets },
     options: { 
       responsive:true, 
       scales:{ 
-        x: { ticks: { color: '#ffffff' }, grid:{ color:'rgba(255,255,255,0.1)' } },
-        y: { beginAtZero:true, ticks: { color: '#ffffff' }, grid:{ color:'rgba(255,255,255,0.1)' } }
+        x: { stacked, ticks: { color: '#ffffff' }, grid:{ color:'rgba(255,255,255,0.1)' } },
+        y: { stacked, beginAtZero:true, ticks: { color: '#ffffff' }, grid:{ color:'rgba(255,255,255,0.1)' } }
       },
       plugins:{
         legend:{ labels:{ color:'#ffffff' } },
@@ -357,7 +431,7 @@ document.getElementById('btn-export-missing-footer').addEventListener('click', e
 function exportXlsx(){
   const wb = XLSX.utils.book_new();
   const shPartidas = XLSX.utils.json_to_sheet(
-    STATE.presupuesto.map(p => ({ Partida:p.partida, Presupuesto:p.presupuesto, Saldo:p.saldo }))
+    STATE.presupuesto.map(p => ({ Partida:p.partida, Presupuesto:p.presupuesto, Saldo:p.saldo, Gastado:p.gastado, Reconducido:p.recon }))
   );
   XLSX.utils.book_append_sheet(wb, shPartidas, 'Partidas');
 
@@ -384,11 +458,13 @@ function exportXlsx(){
   const presupuestoTotal = STATE.presupuesto.reduce((a,b)=>a+(b.presupuesto||0),0);
   const gastadoTotal = STATE.gastos.reduce((a,b)=> a + (b.monto||0), 0);
   const saldoTotal = STATE.presupuesto.reduce((a,b)=> a + (typeof b.saldo==='number'?b.saldo:(b.presupuesto||0)), 0);
+  const reconTotal = STATE.presupuesto.reduce((a,b)=> a + (b.recon||0), 0);
   const shKPIs = XLSX.utils.aoa_to_sheet([
     ['KPI','Valor'],
     ['Presupuesto total', presupuestoTotal],
     ['Gastado',           gastadoTotal],
-    ['Saldo',             saldoTotal]
+    ['Saldo',             saldoTotal],
+    ['Reconducido',       reconTotal]
   ]);
   XLSX.utils.book_append_sheet(wb, shKPIs, 'KPIs');
 
@@ -425,3 +501,7 @@ function saveLS(){
   };
   localStorage.setItem(LS_KEY, JSON.stringify(data));
 }
+
+/* ===== Listeners para la gráfica ===== */
+document.getElementById('chart-group')?.addEventListener('change', renderChart);
+document.getElementById('chart-stacked')?.addEventListener('change', renderChart);

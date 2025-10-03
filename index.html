@@ -34,7 +34,6 @@
           <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
         </button>
 
-        <!-- (opcional) Guardar: no se usa con la API actual. Puedes ocultarlo. -->
         <button id="btn-save" class="btn btn-success btn-sm d-none">
           <i class="bi bi-cloud-check me-1"></i>Guardar
         </button>
@@ -143,7 +142,7 @@
                 <input type="text" class="form-control" id="g-desc" placeholder="Ej. Compra de equipo" required>
               </div>
               <div class="col-5">
-                <label class="form-label">Partida (opcional)</label>
+                <label class="form-label">Partida</label>
                 <input type="text" class="form-control" id="g-partida" placeholder="Partida">
               </div>
               <div class="col-7">
@@ -165,7 +164,7 @@
             <h6 class="mb-3">Reconducciones</h6>
             <form id="form-recon" class="row g-2">
               <div class="col-12">
-                <label class="form-label">Concepto (opcional)</label>
+                <label class="form-label">Concepto</label>
                 <input type="text" class="form-control" id="r-concepto" placeholder="Ej. Conmutador / UPS">
               </div>
               <div class="col-6">
@@ -232,12 +231,21 @@
         <div class="card">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="mb-0">Gasto mensual</h6>
-              <small class="text-muted-2">Agrupado por mes</small>
-            </div>
-            <canvas id="chart-mensual" height="120"></canvas>
-          </div>
-        </div>
+  <h6 class="mb-0">Indicadores</h6>
+  <div class="d-flex gap-2 align-items-center">
+    <small class="text-muted-2">Agrupar por</small>
+    <select id="chart-group" class="form-select form-select-sm w-auto">
+      <option value="mes" selected>Mes</option>
+      <option value="partida">Partida</option>
+      <option value="global">Global</option>
+    </select>
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="checkbox" id="chart-stacked">
+      <label class="form-check-label" for="chart-stacked">Apilar</label>
+    </div>
+  </div>
+</div>
+<canvas id="chart-mensual" height="120"></canvas>
 
         <div class="alert alert-soft mt-3" id="missing-alert" style="display:none;">
           <div class="d-flex justify-content-between align-items-center">

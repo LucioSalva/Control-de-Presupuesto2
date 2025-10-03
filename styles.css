@@ -1,4 +1,3 @@
-/* ===== Tema oscuro y tipografía en blanco ===== */
 body {
   background: #fdfdfd;
   color: #ffffff;
@@ -57,7 +56,6 @@ body * {
   font-size: 0.9rem;
 }
 
-/* ===== Texto negro en tablas ===== */
 .table thead th,
 .table tbody td {
   color: #000000 !important;
@@ -76,7 +74,7 @@ body * {
 }
 /* ===== Alertas legibles ===== */
 .alert {
-  color: rgba(0, 0, 0, 0.9) !important;
+  color: rgba(65, 65, 65, 0.9) !important;
   font-weight: 600;
 }
 .alert a,

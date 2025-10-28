@@ -5,28 +5,99 @@
 /* Fondo claro general y tipografía blanca por defecto (como pediste) */
 body {
   background: #fdfdfd;
+  /* background-image: url(/public/img/logo\ flor.png); */
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
   color: #ffffff;
+  padding-top: 70px; /* IMPORTANTE: Para compensar la navbar fija */
 }
 body,
 body * {
   color: #ffffff !important;
 }
 
-/* Navbar guinda */
+/* Navbar guinda ESTÁTICA */
 .navbar {
   background: #691c32;
+  position: fixed; /* Cambiado a fixed */
+  top: 0;
+  left: 0;
+  right: 0;
+  min-height: 70px;
+  z-index: 1030; /* Asegura que esté por encima de otros elementos */
+  width: 100%;
 }
 
-/* ===== Cards con TRANSPARENCIA =====
-   Ajusta el 0.35 para más/menos claridad (0.25 más claro, 0.5 más oscuro) */
+/* Logo del Ayuntamiento en el centro */
+.navbar-logo {
+  height: 70px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.logo-container {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+}
+
+/* Ajustes para el contenedor principal de la navbar */
+.navbar .container-fluid {
+  position: relative;
+  min-height: 70px;
+}
+
+/* Ajustes responsive para el logo */
+@media (max-width: 992px) {
+  body {
+    padding-top: 120px; /* Más padding en móvil por la navbar más alta */
+  }
+  
+  .logo-container {
+    position: static;
+    transform: none;
+    text-align: center;
+    margin: 10px 0;
+    order: 3;
+    width: 100%;
+  }
+  
+  .navbar .container-fluid {
+    flex-direction: column;
+    min-height: auto;
+  }
+  
+  .navbar-brand {
+    order: 1;
+  }
+  
+  .nav-search {
+    order: 2;
+    margin: 10px 0;
+  }
+  
+  .ms-auto {
+    order: 4;
+    margin-left: 0 !important;
+    margin-top: 10px;
+  }
+}
+
+/* ===== Cards con TRANSPARENCIA =====*/
 .card {
-  background: rgba(0, 0, 0, 0.85); /* <-- transparencia */
-  border: 2px solid #ffffff;
+  background: rgba(255, 255, 255, 0.25); 
+  color: #000000 !important;
   backdrop-filter: blur(10px) saturate(120%);
   -webkit-backdrop-filter: blur(10px) saturate(120%);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
+.card *{
+  color: inherit !important;
+}
 /* Tablas */
 .table thead th {
   border-bottom-color: #1f354d;

@@ -1,5 +1,6 @@
 ﻿<!doctype html>
 <html lang="es">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -35,8 +36,12 @@
         <input id="proj-code" class="form-control form-control-sm nav-search__input" placeholder="ID Presupuesto">
       </form>
 
+      <div class="logo-container">
+        <img src="/public/img/ayuntamiento-de-ecatepec.png" alt="Ayuntamiento de Ecatepec" class="navbar-logo">
+      </div>
+
       <div class="ms-auto d-flex gap-2 align-items-center">
-        <button id="btn-export-xlsx" class="btn btn-outline-light btn-sm">
+        <button id="btn-export-xlsx" class="btn btn-outline-success btn-sm">
           <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
         </button>
         <button id="btn-reset" class="btn btn-outline-danger btn-sm">
@@ -202,8 +207,10 @@
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h6 class="mb-0">Presupuesto por Partida</h6>
               <div class="d-flex align-items-center gap-2">
-                <input id="f-partida" type="text" class="form-control form-control-sm w-auto" placeholder="Filtrar partida">
-                <input id="f-buscar" type="text" class="form-control form-control-sm w-auto" placeholder="Buscar en descripción">
+                <input id="f-partida" type="text" class="form-control form-control-sm w-auto"
+                  placeholder="Filtrar partida">
+                <input id="f-buscar" type="text" class="form-control form-control-sm w-auto"
+                  placeholder="Buscar en descripción">
                 <button id="btn-aplicar" class="btn btn-primary btn-sm">
                   <i class="bi bi-funnel me-1"></i>Filtrar
                 </button>
@@ -339,4 +346,5 @@
   <!-- (Opcional) si usas un archivo extra de alerts personalizados -->
   <!-- <script src="js/alerts.js"></script> -->
 </body>
+
 </html>

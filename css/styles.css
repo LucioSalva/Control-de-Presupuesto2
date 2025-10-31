@@ -10,28 +10,62 @@ body {
   background-position: center;
   background-size: contain;
   color: #ffffff;
-  padding-top: 70px; /* IMPORTANTE: Para compensar la navbar fija */
+  padding-top: 90px; /* Ajustado para las dos navbars */
 }
 body,
 body * {
   color: #ffffff !important;
 }
 
-/* Navbar guinda ESTÁTICA */
+/* Navbar guinda ESTÁTICA - MÁS DELGADA */
 .navbar {
   background: #691c32;
-  position: fixed; /* Cambiado a fixed */
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  min-height: 70px;
-  z-index: 1030; /* Asegura que esté por encima de otros elementos */
+  min-height: 50px; /* Reducida */
+  z-index: 1030;
   width: 100%;
+}
+
+/* Navbar secundaria */
+.navbar-light {
+  position: fixed;
+  top: 50px; /* Debajo de la navbar principal */
+  left: 0;
+  right: 0;
+  min-height: 40px;
+  z-index: 1029;
+  background: #f8f9fa !important;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.navbar-light .nav-link {
+  color: #495057 !important;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  margin: 0 0.25rem;
+}
+
+.navbar-light .nav-link.active {
+  background-color: #691c32;
+  color: white !important;
+}
+
+.navbar-light .nav-link:hover {
+  background-color: #e9ecef;
+  color: #691c32 !important;
+}
+
+.navbar-light .nav-link.active:hover {
+  background-color: #5a1629;
+  color: white !important;
 }
 
 /* Logo del Ayuntamiento en el centro */
 .navbar-logo {
-  height: 70px;
+  height: 40px; /* Reducido */
   max-width: 100%;
   object-fit: contain;
 }
@@ -47,20 +81,20 @@ body * {
 /* Ajustes para el contenedor principal de la navbar */
 .navbar .container-fluid {
   position: relative;
-  min-height: 70px;
+  min-height: 50px; /* Reducido */
 }
 
 /* Ajustes responsive para el logo */
 @media (max-width: 992px) {
   body {
-    padding-top: 120px; /* Más padding en móvil por la navbar más alta */
+    padding-top: 140px; /* Más padding en móvil por las navbars */
   }
   
   .logo-container {
     position: static;
     transform: none;
     text-align: center;
-    margin: 10px 0;
+    margin: 5px 0;
     order: 3;
     width: 100%;
   }
@@ -76,13 +110,17 @@ body * {
   
   .nav-search {
     order: 2;
-    margin: 10px 0;
+    margin: 5px 0;
   }
   
   .ms-auto {
     order: 4;
     margin-left: 0 !important;
-    margin-top: 10px;
+    margin-top: 5px;
+  }
+  
+  .navbar-light {
+    top: 100px; /* Ajustado para móvil */
   }
 }
 
@@ -240,4 +278,32 @@ body * {
 }
 .table tr.search-hit > td:first-child {
   font-weight: 700;
+}
+
+/* Estilos específicos para partidas.html */
+#total-letras {
+  color: #691c32 !important;
+  font-style: italic;
+}
+
+.btn-eliminar {
+  transition: all 0.3s ease;
+}
+
+.btn-eliminar:hover {
+  transform: scale(1.1);
+}
+
+/* Para la tabla de partidas en partidas.html */
+#tabla-partidas {
+  color: #000000 !important;
+}
+
+#tabla-partidas thead th {
+  background-color: #691c32 !important;
+  color: white !important;
+}
+
+#tabla-partidas tbody tr:hover {
+  background-color: #f8f9fa !important;
 }

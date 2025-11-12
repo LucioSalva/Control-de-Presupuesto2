@@ -86,14 +86,12 @@ async function apiDelete(path) {
 // Función para verificar partida duplicada por mes
 async function checkDuplicatePartida(partida, monto, mes, project) {
   if (!partida || !mes || !project) return false;
-  
   try {
     const qs = `?project=${encodeURIComponent(project)}&mes=${encodeURIComponent(mes)}`;
     const detalles = await apiGet('/api/detalles' + qs);
-    
-    return detalles.some(d => 
-      normalizeKey(d.partida) === normalizeKey(partida) && 
-      Math.abs(Number(d.presupuesto) - monto) < 0.01 // Comparación con tolerancia para decimales
+    return detalles.some(d =>
+      normalizeKey(d.partida) === normalizeKey(partida) &&
+      Math.abs(Number(d.presupuesto) - monto) < 0.01
     );
   } catch (error) {
     console.warn('Error al verificar duplicados:', error);
@@ -101,81 +99,124 @@ async function checkDuplicatePartida(partida, monto, mes, project) {
   }
 }
 
-/* ================== NORMALIZADOR DE RECONDUCCIONES ================== */
+/* ================== NORMALIZADOR DE RECONDUCCIONES (TODOS + SIN FALSOS) ================== */
 function mergeReconPairs(reconsRaw) {
   if (!Array.isArray(reconsRaw) || !reconsRaw.length) return [];
 
-  const toISO = (d) => {
-    if (!(d instanceof Date)) return '';
+  const norm = (s) => String(s || '').trim().toLowerCase();
+  const toDayISO = (v) => {
+    if (!v) return '';
+    const d = v instanceof Date ? v : new Date(v);
     const y = d.getUTCFullYear();
     const m = String(d.getUTCMonth() + 1).padStart(2, '0');
     const day = String(d.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   };
+  const toCents = (n) => Math.round(Number(n || 0) * 100);
 
-  const groups = new Map();
-
-  reconsRaw.forEach(r => {
-    const concepto = (r.concepto || '').trim();
-    const fechaISO = r.fecha instanceof Date ? toISO(r.fecha) : (r.fecha ? String(r.fecha) : '');
-    const montoAbs = Math.abs(Number(r.monto || 0));
-    const key = `${concepto}|${fechaISO}|${montoAbs}`;
-
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push({
-      concepto,
-      fecha: r.fecha instanceof Date ? r.fecha : (r.fecha ? new Date(r.fecha) : null),
-      origen: r.origen || '',
-      destino: r.destino || '',
-      monto: Number(r.monto || 0)
-    });
+  // Normaliza entradas
+  const items = reconsRaw.map(r => {
+    const fecha = r?.fecha ? new Date(r.fecha) : null;
+    const monto = Number(r?.monto || 0);
+    const origen = r?.origen || r?.partida_origen || '';
+    const destino = r?.destino || r?.partida_destino || '';
+    return {
+      concepto: String(r?.concepto || '').trim(),
+      conceptoKey: norm(r?.concepto || ''),
+      fecha,
+      fechaKey: toDayISO(fecha),
+      cents: toCents(monto),
+      origen: origen,
+      destino: destino
+    };
   });
 
+  // Agrupa por (concepto, fecha)
+  const groups = new Map();
+  for (const it of items) {
+    const k = `${it.conceptoKey}|${it.fechaKey}`;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(it);
+  }
+
   const merged = [];
+  const TOL = 1; // 1 centavo
 
-  for (const [, arr] of groups.entries()) {
-    if (arr.length === 1) {
-      const a = arr[0];
+  for (const [, arr] of groups) {
+    // Cargos = negativos (origen), Abonos = positivos (destino)
+    let debits = arr.filter(x => x.cents < 0).map(x => ({
+      concepto: x.concepto, fecha: x.fecha,
+      origen: x.origen || x.destino || '',
+      cents: Math.abs(x.cents)
+    }));
+    let credits = arr.filter(x => x.cents > 0).map(x => ({
+      concepto: x.concepto, fecha: x.fecha,
+      destino: x.destino || x.origen || '',
+      cents: x.cents
+    }));
+
+    // Ordena de mayor a menor
+    debits.sort((a, b) => b.cents - a.cents);
+    credits.sort((a, b) => b.cents - a.cents);
+
+    // Empareja todo lo posible
+    while (debits.length && credits.length) {
+      let d = debits[0];
+
+      // Mejor match: igual monto (±1 cent) o más cercano
+      let idx = credits.findIndex(c => Math.abs(c.cents - d.cents) <= TOL);
+      if (idx === -1) {
+        let best = 0, bestDiff = Math.abs(credits[0].cents - d.cents);
+        for (let i = 1; i < credits.length; i++) {
+          const diff = Math.abs(credits[i].cents - d.cents);
+          if (diff < bestDiff) { best = i; bestDiff = diff; }
+        }
+        idx = best;
+      }
+      const c = credits[idx];
+      const used = Math.min(d.cents, c.cents);
+
       merged.push({
-        concepto: a.concepto || '',
-        origen: a.origen || '',
-        destino: a.destino || '',
-        monto: Math.abs(a.monto || 0),
-        fecha: a.fecha || null
+        concepto: d.concepto || c.concepto || '',
+        origen: d.origen || '',
+        destino: c.destino || '',
+        monto: used / 100,
+        fecha: d.fecha || c.fecha || null,
+        _incompleta: false
       });
-      continue;
-    }
-    let origen = '';
-    let destino = '';
-    let fecha = arr[0].fecha || null;
-    let concepto = arr[0].concepto || '';
-    let monto = Math.abs(arr[0].monto || 0);
 
-    const neg = arr.find(x => x.monto < 0);
-    const pos = arr.find(x => x.monto > 0);
-
-    if (neg && pos) {
-      origen = neg.origen || neg.destino || origen;
-      destino = pos.destino || pos.origen || destino;
-      fecha = neg.fecha || pos.fecha || fecha;
-      monto = Math.max(Math.abs(neg.monto), Math.abs(pos.monto));
-    } else {
-      const withOrigen = arr.find(x => x.origen);
-      const withDestino = arr.find(x => x.destino);
-      if (withOrigen) origen = withOrigen.origen;
-      if (withDestino) destino = withDestino.destino;
-      if (!origen && arr[0]) origen = arr[0].origen || arr[0].destino || '';
-      if (!destino && arr[1]) destino = arr[1].destino || arr[1].origen || '';
-      fecha = (arr.find(x => x.fecha) || {}).fecha || fecha;
-      monto = Math.max(...arr.map(x => Math.abs(Number(x.monto || 0)))) || monto;
+      d.cents -= used;
+      c.cents -= used;
+      if (d.cents <= 0 + TOL) debits.shift();
+      if (c.cents <= 0 + TOL) credits.splice(idx, 1);
     }
 
-    merged.push({
-      concepto,
-      origen: origen || '',
-      destino: destino || '',
-      monto: Number(monto) || 0,
-      fecha: fecha || null
+    // === Mostrar también los “antiguos” incompletos ===
+    // Solo agregamos el lado existente y marcamos como incompleto,
+    // pero NUNCA inventamos el otro lado ni ponemos origen=destino.
+    debits.forEach(d => {
+      if (d.cents > 0) {
+        merged.push({
+          concepto: d.concepto || '',
+          origen: d.origen || '',
+          destino: '',
+          monto: d.cents / 100,
+          fecha: d.fecha || null,
+          _incompleta: true
+        });
+      }
+    });
+    credits.forEach(c => {
+      if (c.cents > 0) {
+        merged.push({
+          concepto: c.concepto || '',
+          origen: '',
+          destino: c.destino || '',
+          monto: c.cents / 100,
+          fecha: c.fecha || null,
+          _incompleta: true
+        });
+      }
     });
   }
 
@@ -368,11 +409,17 @@ function renderMovimientos() {
   movs.forEach(m => {
     const tr = document.createElement('tr');
     tr.dataset.partida = m.destino;
+
+    // 👉 Si fue marcada como incompleta en mergeReconPairs, añadimos clase/etiqueta
+    if (m._incompleta) tr.classList.add('table-warning'); // opcional, solo color
+    const tipo = m._incompleta ? 'Reconducción (incompleta)' : m.tipo;
+
     const fechaStr = m.fecha ?
       `${String(m.fecha.getUTCDate()).padStart(2, '0')}/${MES[m.fecha.getUTCMonth()]}/${m.fecha.getUTCFullYear()}` : '—';
+
     tr.innerHTML = `
       <td>${fechaStr}</td>
-      <td class="fw-semibold">${m.tipo}</td>
+      <td class="fw-semibold">${tipo}</td>
       <td>${escapeHtml(m.concepto)}</td>
       <td>${escapeHtml(m.origen)}</td>
       <td>${escapeHtml(m.destino)}</td>
@@ -381,6 +428,7 @@ function renderMovimientos() {
     tbody.appendChild(tr);
   });
 }
+
 
 /* ===== Gráfica ===== */
 function buildChartData(group) {
@@ -478,12 +526,9 @@ document.getElementById('form-partida').addEventListener('submit', async (ev) =>
   if (!clave || isNaN(presupuesto) || !mes) return banner('Captura partida, presupuesto y mes válidos', 'warning');
   
   try {
-    // Verificar si ya existe la partida en el mismo mes
     const esDuplicado = await checkDuplicatePartida(clave, presupuesto, mes, project);
-    
     if (esDuplicado) {
       const mesNombre = new Date(mes + '-01').toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
-      
       const result = await Swal.fire({
         title: '¿Partida duplicada?',
         html: `En <strong>${mesNombre}</strong> ya existe la partida <strong>"${escapeHtml(clave)}"</strong> con el monto <strong>${money(presupuesto)}</strong>. ¿Deseas guardarla de todos modos?`,
@@ -492,31 +537,16 @@ document.getElementById('form-partida').addEventListener('submit', async (ev) =>
         confirmButtonText: 'Sí, guardar',
         cancelButtonText: 'No, cancelar',
         background: '#1a1a1a',
-        color: '#ffffff',
-        customClass: { popup: 'sweetalert-duplicate-alert' }
+        color: '#ffffff'
       });
-      
-      if (!result.isConfirmed) {
-        banner('Partida no guardada', 'info');
-        return;
-      }
+      if (!result.isConfirmed) { banner('Partida no guardada', 'info'); return; }
     }
-    
-    // Guardar la partida
-    await apiPost('/api/detalles', { 
-      project, 
-      partida: clave, 
-      presupuesto,
-      mes
-    });
-    
+    await apiPost('/api/detalles', { project, partida: clave, presupuesto, mes });
     await loadFromAPI(); 
     renderAll();
     banner('Partida guardada', 'success');
     ev.target.reset();
-  } catch (e) { 
-    banner(e.message, 'danger'); 
-  }
+  } catch (e) { banner(e.message, 'danger'); }
 });
 
 document.getElementById('form-gasto').addEventListener('submit', async (ev) => {

@@ -2,15 +2,13 @@
   --letras: #ffffff;
 }
 
-/* Fondo claro general y tipografía blanca por defecto (como pediste) */
 body {
   background: #fdfdfd;
-  /* background-image: url(/public/img/logo\ flor.png); */
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
   color: #ffffff;
-  padding-top: 90px; /* Ajustado para las dos navbars */
+  padding-top: 90px;
 }
 body,
 body * {
@@ -18,23 +16,20 @@ body * {
 }
 
 
-
-/* Navbar guinda ESTÁTICA - MÁS DELGADA */
 .navbar {
   background: #691c32;
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  min-height: 50px; /* Reducida */
+  min-height: 50px;
   z-index: 1030;
   width: 100%;
 }
 
-/* Navbar secundaria */
 .navbar-light {
   position: fixed;
-  top: 50px; /* Debajo de la navbar principal */
+  top: 50px;
   left: 0;
   right: 0;
   min-height: 40px;
@@ -65,9 +60,8 @@ body * {
   color: white !important;
 }
 
-/* Logo del Ayuntamiento en el centro */
 .navbar-logo {
-  height: 40px; /* Reducido */
+  height: 40px; 
   max-width: 100%;
   object-fit: contain;
 }
@@ -80,16 +74,14 @@ body * {
   z-index: 1;
 }
 
-/* Ajustes para el contenedor principal de la navbar */
 .navbar .container-fluid {
   position: relative;
-  min-height: 50px; /* Reducido */
+  min-height: 50px; 
 }
 
-/* Ajustes responsive para el logo */
 @media (max-width: 992px) {
   body {
-    padding-top: 140px; /* Más padding en móvil por las navbars */
+    padding-top: 140px;
   }
   
   .logo-container {
@@ -122,7 +114,7 @@ body * {
   }
   
   .navbar-light {
-    top: 100px; /* Ajustado para móvil */
+    top: 100px;
   }
 }
 
@@ -130,7 +122,6 @@ body * {
   margin-top: 1px;
 }
 
-/* ===== Cards con TRANSPARENCIA =====*/
 .card {
   background: rgba(255, 255, 255, 0.25); 
   color: #000000 !important;
@@ -142,7 +133,6 @@ body * {
 .card *{
   color: inherit !important;
 }
-/* Tablas */
 .table thead th {
   border-bottom-color: #1f354d;
 }
@@ -157,7 +147,6 @@ body * {
   border-color: #1f354d !important;
 }
 
-/* Inputs y selects */
 .form-control,
 .form-select {
   background: #0f1720 !important;
@@ -168,7 +157,6 @@ body * {
   color: #ffffff !important;
 }
 
-/* Alertas y modales */
 .alert-soft {
   background: #0f1720;
   color: #ffffff;
@@ -183,13 +171,11 @@ body * {
   color: #ffffff;
 }
 
-/* KPI */
 .kpi-title {
   opacity: 0.9;
   font-size: 0.9rem;
 }
 
-/* Si quieres celdas de tabla en blanco con letra negra */
 .table thead th,
 .table tbody td {
   color: #000000 !important;
@@ -206,7 +192,6 @@ body * {
   content: attr(data-pill);
 }
 
-/* Alertas legibles */
 .alert {
   color: rgba(65, 65, 65, 0.9) !important;
   font-weight: 600;
@@ -216,7 +201,6 @@ body * {
   color: inherit !important;
 }
 
-/* Barra de búsqueda en navbar */
 .nav-search {
   position: relative;
   display: flex;
@@ -277,7 +261,6 @@ body * {
   color: rgba(255, 255, 255, 0.7) !important;
 }
 
-/* Resaltado de búsqueda en tablas */
 .table tr.search-hit > td {
   background: rgba(188, 149, 92, 0.25) !important;
   transition: background 0.35s ease;
@@ -286,7 +269,6 @@ body * {
   font-weight: 700;
 }
 
-/* Estilos específicos para partidas.html */
 #total-letras {
   color: #691c32 !important;
   font-style: italic;
@@ -300,7 +282,6 @@ body * {
   transform: scale(1.1);
 }
 
-/* Para la tabla de partidas en partidas.html */
 #tabla-partidas {
   color: #000000 !important;
 }

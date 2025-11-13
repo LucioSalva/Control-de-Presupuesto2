@@ -38,7 +38,7 @@ app.get("/api/detalles", async (req, res) => {
               fecha_cuando_se_gasto, en_que_se_gasto, total_gastado,
               fecha_reconduccion, motivo_reconduccion, total_reconducido,
               saldo_disponible, fecha_registro
-         FROM presupuesto_detalle
+        FROM presupuesto_detalle
         WHERE idProyecto = $1
         ORDER BY partida`,
       [project]
@@ -84,10 +84,10 @@ app.post("/api/detalles", async (req, res) => {
 
     const r = await query(
       `INSERT INTO presupuesto_detalle (idProyecto, partida, presupuesto, saldo_disponible)
-       VALUES ($1,$2,$3,$4)
-       ON CONFLICT (idProyecto, partida)
-       DO UPDATE SET presupuesto = EXCLUDED.presupuesto,
-                     saldo_disponible = $4
+        VALUES ($1,$2,$3,$4)
+        ON CONFLICT (idProyecto, partida)
+      DO UPDATE SET presupuesto = EXCLUDED.presupuesto,
+                    saldo_disponible = $4
        RETURNING *`,
       [project, partida, presupuesto, saldo]
     );
@@ -112,7 +112,7 @@ app.get("/api/gastos", async (req, res) => {
 
     const r = await query(
       `SELECT id, idProyecto, partida, fecha, descripcion, monto
-         FROM public.gastos_detalle
+        FROM public.gastos_detalle
         WHERE idProyecto = $1
         ORDER BY fecha DESC, id DESC`,
       [project]
@@ -141,9 +141,7 @@ app.post("/api/gastos", async (req, res) => {
     if (!project)
       return res.status(400).json({ error: "project es obligatorio" });
     if (!partida || isNaN(monto) || monto <= 0)
-      return res
-        .status(400)
-        .json({ error: "partida y monto > 0 requeridos" });
+      return res.status(400).json({ error: "partida y monto > 0 requeridos" });
 
     const client = await getClient();
     try {
@@ -242,10 +240,9 @@ app.delete("/api/gastos/:id", async (req, res) => {
       const { idproyecto, partida } = old.rows[0];
 
       // 2) Borrar el gasto
-      await client.query(
-        `DELETE FROM public.gastos_detalle WHERE id = $1`,
-        [id]
-      );
+      await client.query(`DELETE FROM public.gastos_detalle WHERE id = $1`, [
+        id,
+      ]);
 
       // 3) Recalcular total_gastado
       const tot = await client.query(

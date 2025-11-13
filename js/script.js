@@ -56,8 +56,9 @@ function showNegativeBalanceAlert(partidasNegativas) {
 }
 
 const showSpinner = (v) => document.getElementById('spinner').style.display = v ? 'block' : 'none';
-const escapeHtml = (s) => String(s).replace(/[&<>\"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
-
+const escapeHtml = (s) => String(s).replace(/[&<>\"']/g, (c) => (
+  {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]
+));
 // === API base ===
 const API_URL = 'http://localhost:3000';
 
@@ -592,9 +593,15 @@ if (navSearchForm) {
     const input = document.getElementById('proj-code');
     const rawValue = (input?.value || '').trim();
     if (!rawValue) { input?.focus(); return; }
+
+    // Guarda para que index/partidas se “hablen”
+    localStorage.setItem('cp_current_project', rawValue);
+
     showSpinner(true);
     try {
       await loadFromAPI();
+      // ... (resto igual que ya tienes)
+
       const key = normalizeKey(rawValue);
       const foundPartida = STATE.presupuesto.some(p => normalizeKey(p.partida) === key);
       STATE.highlightPartida = foundPartida ? key : null;
@@ -743,30 +750,41 @@ function exportXlsx() {
 }
 document.getElementById('btn-export-xlsx').addEventListener('click', exportXlsx);
 
-// Init
+// Al principio del DOMContentLoaded, antes de loadFromAPI():
 window.addEventListener('DOMContentLoaded', async () => {
+  const params = new URLSearchParams(window.location.search);
+  const qProject = params.get('project');
+  const memProject = localStorage.getItem('cp_current_project'); // mismo key que usa partidas.html
+  const input = document.getElementById('proj-code');
+
+  if (qProject) {
+    input.value = qProject;
+    localStorage.setItem('cp_current_project', qProject);
+  } else if (memProject && !input.value) {
+    input.value = memProject;
+  }
+
   const today = new Date().toISOString().split('T')[0];
-  const gFecha = document.getElementById('g-fecha');
+  const gFecha = document.getElementById('g-fecha'); // ya no existe, no pasa nada si es null
   const rFecha = document.getElementById('r-fecha');
-  const pMes = document.getElementById('p-mes');
-  
+  const pMes   = document.getElementById('p-mes');
   if (gFecha) gFecha.value = today;
   if (rFecha) rFecha.value = today;
-  if (pMes) pMes.value = today.slice(0, 7); // Formato YYYY-MM
+  if (pMes)   pMes.value   = today.slice(0, 7);
 
-  const project = (document.getElementById('proj-code').value || '').trim();
-  if (project) {
-    try {
+  try {
+    if ((input.value || '').trim()) {
       await loadFromAPI();
       banner('Datos cargados desde PostgreSQL.', 'info');
-    } catch (e) {
-      banner('No se pudo conectar al backend. Revisa que el servidor esté corriendo.', 'danger');
+    } else {
+      STATE.presupuesto = []; STATE.gastos = []; STATE.recon = [];
     }
-  } else {
-    STATE.presupuesto = []; STATE.gastos = []; STATE.recon = [];
+  } catch (e) {
+    banner('No se pudo conectar al backend. Revisa que el servidor esté corriendo.', 'danger');
   }
   renderAll();
 });
+
 
 // Cambiar proyecto
 document.getElementById('proj-code').addEventListener('change', async () => {

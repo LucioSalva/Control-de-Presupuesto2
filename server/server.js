@@ -1,6 +1,5 @@
 ﻿// server.js (project alfanumérico)
 import express from "express";
-import pg from 'pg';
 import cors from "cors";
 import dotenv from "dotenv";
 import { query, getClient } from "./db.js";
@@ -24,7 +23,7 @@ function computeSaldo({
   );
 }
 
-// Salud
+// ---------- Salud ----------
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 /* ---------- DETALLES (partidas por proyecto) ---------- */
@@ -33,16 +32,18 @@ app.get("/api/detalles", async (req, res) => {
   try {
     const project = String(req.query.project || "").trim();
     if (!project) return res.json([]);
+
     const r = await query(
       `SELECT id, idProyecto, partida, presupuesto,
               fecha_cuando_se_gasto, en_que_se_gasto, total_gastado,
               fecha_reconduccion, motivo_reconduccion, total_reconducido,
-              saldo_disponible
+              saldo_disponible, fecha_registro
          FROM presupuesto_detalle
         WHERE idProyecto = $1
         ORDER BY partida`,
       [project]
     );
+
     res.json(r.rows);
   } catch (e) {
     console.error("GET /api/detalles", e);
@@ -98,8 +99,37 @@ app.post("/api/detalles", async (req, res) => {
   }
 });
 
-/* ---------- GASTOS (acumula totales) ---------- */
-// POST /api/gastos { project, partida, fecha, descripcion, monto }
+/* ---------- GASTOS (histórico + totales) ---------- */
+
+/**
+ * GET /api/gastos?project=ID
+ * Regresa el historial de gastos del proyecto desde la tabla public.gastos_detalle
+ */
+app.get("/api/gastos", async (req, res) => {
+  try {
+    const project = String(req.query.project || "").trim();
+    if (!project) return res.json([]);
+
+    const r = await query(
+      `SELECT id, idProyecto, partida, fecha, descripcion, monto
+         FROM public.gastos_detalle
+        WHERE idProyecto = $1
+        ORDER BY fecha DESC, id DESC`,
+      [project]
+    );
+
+    res.json(r.rows);
+  } catch (e) {
+    console.error("GET /api/gastos", e);
+    res.status(500).json({ error: "Error obteniendo gastos" });
+  }
+});
+
+/**
+ * POST /api/gastos
+ * body: { project, partida, fecha, descripcion, monto }
+ * Inserta en gastos_detalle y recalcula total_gastado + saldo_disponible en presupuesto_detalle
+ */
 app.post("/api/gastos", async (req, res) => {
   try {
     const project = String(req.body.project || "").trim();
@@ -111,13 +141,22 @@ app.post("/api/gastos", async (req, res) => {
     if (!project)
       return res.status(400).json({ error: "project es obligatorio" });
     if (!partida || isNaN(monto) || monto <= 0)
-      return res.status(400).json({ error: "partida y monto > 0 requeridos" });
+      return res
+        .status(400)
+        .json({ error: "partida y monto > 0 requeridos" });
 
     const client = await getClient();
     try {
       await client.query("BEGIN");
 
-      // asegurar existencia de fila
+      // 1) Insertar en historial de gastos
+      await client.query(
+        `INSERT INTO public.gastos_detalle (idProyecto, partida, fecha, descripcion, monto)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [project, partida, fecha, descripcion, monto]
+      );
+
+      // 2) Asegurar que exista la fila en presupuesto_detalle
       await client.query(
         `INSERT INTO presupuesto_detalle (idProyecto, partida, presupuesto, saldo_disponible)
          VALUES ($1,$2,0,0)
@@ -125,34 +164,42 @@ app.post("/api/gastos", async (req, res) => {
         [project, partida]
       );
 
-      // acumular gasto
+      // 3) Recalcular total_gastado a partir de la tabla de historial
+      const tot = await client.query(
+        `SELECT COALESCE(SUM(monto),0) AS total_gastado
+           FROM public.gastos_detalle
+          WHERE idProyecto = $1 AND partida = $2`,
+        [project, partida]
+      );
+      const total_gastado = Number(tot.rows[0].total_gastado || 0);
+
+      // 4) Obtener presupuesto y total_reconducido actuales
+      const det = await client.query(
+        `SELECT presupuesto, total_reconducido
+           FROM presupuesto_detalle
+          WHERE idProyecto = $1 AND partida = $2`,
+        [project, partida]
+      );
+      const row = det.rows[0] || { presupuesto: 0, total_reconducido: 0 };
+
+      const saldo = computeSaldo({
+        presupuesto: row.presupuesto,
+        total_gastado,
+        total_reconducido: row.total_reconducido,
+      });
+
+      // 5) Actualizar totales en presupuesto_detalle
       const upd = await client.query(
         `UPDATE presupuesto_detalle
-            SET total_gastado = COALESCE(total_gastado,0) + $1,
-                fecha_cuando_se_gasto = COALESCE($2, fecha_cuando_se_gasto),
-                en_que_se_gasto = COALESCE($3, en_que_se_gasto)
-          WHERE idProyecto = $4 AND partida = $5
-          RETURNING presupuesto, total_gastado, total_reconducido`,
-        [monto, fecha, descripcion, project, partida]
-      );
-
-      const row = upd.rows[0] || {
-        presupuesto: 0,
-        total_gastado: 0,
-        total_reconducido: 0,
-      };
-      const saldo = computeSaldo(row);
-
-      const updSaldo = await client.query(
-        `UPDATE presupuesto_detalle
-            SET saldo_disponible = $1
-          WHERE idProyecto = $2 AND partida = $3
+            SET total_gastado    = $1,
+                saldo_disponible = $2
+          WHERE idProyecto = $3 AND partida = $4
           RETURNING *`,
-        [saldo, project, partida]
+        [total_gastado, saldo, project, partida]
       );
 
       await client.query("COMMIT");
-      res.json({ ok: true, detalle: updSaldo.rows[0] });
+      res.json({ ok: true, detalle: upd.rows[0] });
     } catch (txErr) {
       await client.query("ROLLBACK");
       console.error("POST /api/gastos", txErr);
@@ -163,6 +210,89 @@ app.post("/api/gastos", async (req, res) => {
   } catch (e) {
     console.error("POST /api/gastos", e);
     res.status(500).json({ error: "Error guardando gasto" });
+  }
+});
+
+/**
+ * DELETE /api/gastos/:id
+ * Borra un gasto del historial y recalcula total_gastado + saldo_disponible.
+ */
+app.delete("/api/gastos/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!id) return res.status(400).json({ error: "id inválido" });
+
+    const client = await getClient();
+    try {
+      await client.query("BEGIN");
+
+      // 1) Recuperar el gasto para saber proyecto y partida
+      const old = await client.query(
+        `SELECT idProyecto, partida
+           FROM public.gastos_detalle
+          WHERE id = $1`,
+        [id]
+      );
+
+      if (!old.rows.length) {
+        await client.query("ROLLBACK");
+        return res.json({ ok: true, deleted: false });
+      }
+
+      const { idproyecto, partida } = old.rows[0];
+
+      // 2) Borrar el gasto
+      await client.query(
+        `DELETE FROM public.gastos_detalle WHERE id = $1`,
+        [id]
+      );
+
+      // 3) Recalcular total_gastado
+      const tot = await client.query(
+        `SELECT COALESCE(SUM(monto),0) AS total_gastado
+           FROM public.gastos_detalle
+          WHERE idProyecto = $1 AND partida = $2`,
+        [idproyecto, partida]
+      );
+      const total_gastado = Number(tot.rows[0].total_gastado || 0);
+
+      // 4) Obtener presupuesto y total_reconducido actuales
+      const det = await client.query(
+        `SELECT presupuesto, total_reconducido
+           FROM presupuesto_detalle
+          WHERE idProyecto = $1 AND partida = $2`,
+        [idproyecto, partida]
+      );
+      const row = det.rows[0] || { presupuesto: 0, total_reconducido: 0 };
+
+      const saldo = computeSaldo({
+        presupuesto: row.presupuesto,
+        total_gastado,
+        total_reconducido: row.total_reconducido,
+      });
+
+      // 5) Actualizar totales en presupuesto_detalle
+      const upd = await client.query(
+        `UPDATE presupuesto_detalle
+            SET total_gastado    = $1,
+                saldo_disponible = $2
+          WHERE idProyecto = $3 AND partida = $4
+          RETURNING *`,
+        [total_gastado, saldo, idproyecto, partida]
+      );
+
+      await client.query("COMMIT");
+      res.json({ ok: true, deleted: true, detalle: upd.rows[0] });
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      console.error("DELETE /api/gastos/:id", txErr);
+      res.status(500).json({ error: "Error eliminando gasto" });
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error("DELETE /api/gastos/:id", e);
+    res.status(500).json({ error: "Error eliminando gasto" });
   }
 });
 
@@ -266,6 +396,7 @@ app.delete("/api/project", async (req, res) => {
     const project = String(req.query.project || "").trim();
     if (!project)
       return res.status(400).json({ error: "project es obligatorio" });
+
     const r = await query(
       "DELETE FROM presupuesto_detalle WHERE idProyecto = $1",
       [project]
@@ -277,42 +408,44 @@ app.delete("/api/project", async (req, res) => {
   }
 });
 
+/* ---------- Checadores de duplicados ---------- */
+
+app.get("/api/check-duplicates", async (req, res) => {
+  try {
+    const { project, partida } = req.query;
+    const result = await query(
+      `SELECT partida, presupuesto, fecha_registro 
+         FROM public.presupuesto_detalle 
+        WHERE idProyecto = $1 AND partida = $2 
+        ORDER BY fecha_registro DESC`,
+      [project, partida]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error("GET /api/check-duplicates", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/check-recon-duplicates", async (req, res) => {
+  try {
+    const { project, origen, destino, monto } = req.query;
+    const result = await query(
+      `SELECT origen, destino, monto, fecha_reconduccion 
+         FROM public.reconducciones 
+        WHERE idProyecto = $1 AND origen = $2 AND destino = $3 AND monto = $4 
+        ORDER BY fecha_reconduccion DESC`,
+      [project, origen, destino, monto]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error("GET /api/check-recon-duplicates", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /* ======================== Arranque ============================= */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("API escuchando en http://localhost:" + PORT);
-});
-
-
-// En tu server.js (backend)
-app.get('/api/check-duplicates', async (req, res) => {
-    try {
-        const { project, partida } = req.query;
-        const result = await pool.query(
-            `SELECT partida, presupuesto, fecha_registro 
-             FROM public.presupuesto_detalle 
-             WHERE idProyecto = $1 AND partida = $2 
-             ORDER BY fecha_registro DESC`,
-            [project, partida]
-        );
-        res.json(result.rows);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.get('/api/check-recon-duplicates', async (req, res) => {
-    try {
-        const { project, origen, destino, monto } = req.query;
-        const result = await pool.query(
-            `SELECT origen, destino, monto, fecha_reconduccion 
-             FROM public.reconducciones 
-             WHERE idProyecto = $1 AND origen = $2 AND destino = $3 AND monto = $4 
-             ORDER BY fecha_reconduccion DESC`,
-            [project, origen, destino, monto]
-        );
-        res.json(result.rows);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
 });

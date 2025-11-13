@@ -1,549 +1,248 @@
-// Estado global para las partidas
-const PARTIDAS_STATE = {
-  partidas: [],
-  ivaAplicado: false,
-  proyectoId: '',
-  fechaPartida: '',
-  fechaCreacion: '',
-  fechaActualizacion: ''
-};
-
-// === API base ===
+// ===== utilidades =====
 const API_URL = 'http://localhost:3000';
+const LS_PROJECT_KEY = 'cp_current_project';
+const MES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
+const money = (v) => {
+  if (v === undefined || v === null || isNaN(v)) return '—';
+  return Number(v).toLocaleString('es-MX', { style:'currency', currency:'MXN', maximumFractionDigits:2 });
+};
+const escapeHtml = (s) => String(s).replace(/[&<>\"']/g, (c) => (
+  {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]
+));
+// ===== API helpers =====
 async function apiGet(path) {
   const r = await fetch(API_URL + path);
   if (!r.ok) throw new Error('GET ' + path + ' ' + r.status);
   return r.json();
 }
-
 async function apiPost(path, body) {
   const r = await fetch(API_URL + path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
-  const data = await r.json().catch(() => ({}));
+  const data = await r.json().catch(()=>({}));
   if (!r.ok || data.error) throw new Error(data.error || ('POST ' + path));
   return data;
 }
-
 async function apiDelete(path) {
   const r = await fetch(API_URL + path, { method: 'DELETE' });
-  const d = await r.json().catch(() => ({}));
+  const d = await r.json().catch(()=>({}));
   if (!r.ok || d.error) throw new Error(d.error || ('DELETE ' + path));
   return d;
 }
 
-// Función para formatear dinero
-const money = (v) => {
-  if (v === undefined || v === null || isNaN(v)) return '$0.00';
-  return Number(v).toLocaleString('es-MX', { 
-    style: 'currency', 
-    currency: 'MXN', 
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2 
-  });
+// ===== Estado =====
+const STATE = {
+  proyecto: '',
+  partidas: [],   // [{partida, presupuesto, saldo, gastado, recon}]
+  gastos: []      // [{id, fecha, descripcion, partida, monto}]
 };
 
-// Función para formatear fecha
-function formatearFecha(fecha) {
-  if (!fecha) return '--/--/----';
-  const date = new Date(fecha);
-  return date.toLocaleDateString('es-MX', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  });
-}
-
-// Función para obtener fecha actual en formato YYYY-MM-DD
-function obtenerFechaActual() {
-  return new Date().toISOString().split('T')[0];
-}
-
-// Función para mostrar fecha actual en español
-function mostrarFechaActual() {
-  const ahora = new Date();
-  const opciones = { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  };
-  return ahora.toLocaleDateString('es-MX', opciones);
-}
-
-// Función para convertir número a letras
-function numeroALetras(numero) {
-  const unidades = ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE'];
-  const decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
-  const especiales = ['DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISÉIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE'];
-  const centenas = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
-
-  if (numero === 0) return 'CERO';
-
-  let entero = Math.floor(numero);
-  let decimal = Math.round((numero - entero) * 100);
-  let letras = '';
-
-  // Procesar parte entera
-  if (entero > 0) {
-    if (entero >= 1000000) {
-      let millones = Math.floor(entero / 1000000);
-      if (millones === 1) {
-        letras += 'UN MILLÓN ';
-      } else {
-        letras += numeroALetras(millones) + ' MILLONES ';
-      }
-      entero %= 1000000;
-    }
-
-    if (entero >= 1000) {
-      let miles = Math.floor(entero / 1000);
-      if (miles === 1) {
-        letras += 'MIL ';
-      } else {
-        letras += numeroALetras(miles) + ' MIL ';
-      }
-      entero %= 1000;
-    }
-
-    if (entero >= 100) {
-      letras += centenas[Math.floor(entero / 100)] + ' ';
-      entero %= 100;
-    }
-
-    if (entero >= 10 && entero <= 19) {
-      letras += especiales[entero - 10] + ' ';
-      entero = 0;
-    } else if (entero >= 20) {
-      letras += decenas[Math.floor(entero / 10)];
-      entero %= 10;
-      if (entero > 0) {
-        letras += ' Y ' + unidades[entero] + ' ';
-      } else {
-        letras += ' ';
-      }
-    } else if (entero > 0) {
-      letras += unidades[entero] + ' ';
-    }
-  } else {
-    letras = 'CERO ';
-  }
-
-  letras += 'PESOS';
-
-  // Procesar decimales
-  if (decimal > 0) {
-    letras += ` ${decimal.toString().padStart(2, '0')}/100`;
-  } else {
-    letras += ' 00/100';
-  }
-
-  letras += ' M.N.';
-
-  return letras.trim();
-}
-
-// Calcular importe total automáticamente
-function calcularImporteTotal() {
-  const cantidad = parseFloat(document.getElementById('cantidad').value) || 0;
-  const precioUnitario = parseFloat(document.getElementById('precio-unitario').value) || 0;
-  const importeTotal = cantidad * precioUnitario;
-  
-  document.getElementById('importe-total').value = money(importeTotal);
-  return importeTotal;
-}
-
-// Actualizar cálculos generales
-function actualizarCalculosGenerales() {
-  const subtotal = PARTIDAS_STATE.partidas.reduce((sum, partida) => sum + partida.importeTotal, 0);
-  
-  let iva = 0;
-  let totalGeneral = subtotal;
-  
-  if (PARTIDAS_STATE.ivaAplicado) {
-    iva = subtotal * 0.16;
-    totalGeneral = subtotal + iva;
-  }
-  
-  document.getElementById('subtotal').textContent = money(subtotal);
-  document.getElementById('iva').textContent = money(iva);
-  document.getElementById('total-general').textContent = money(totalGeneral);
-  document.getElementById('total-letras').textContent = numeroALetras(totalGeneral);
-}
-
-// Agregar partida a la tabla
-function agregarPartidaATabla(partida, index) {
-  const tbody = document.getElementById('tbody-partidas');
-  const tr = document.createElement('tr');
-  
-  tr.innerHTML = `
-    <td>${index + 1}</td>
-    <td>${partida.cantidad}</td>
-    <td>${partida.unidadMedida}</td>
-    <td>${partida.descripcion}</td>
-    <td class="text-end">${money(partida.precioUnitario)}</td>
-    <td class="text-end">${money(partida.importeTotal)}</td>
-    <td class="text-center">
-      <button class="btn btn-sm btn-outline-danger btn-eliminar" data-index="${index}">
-        <i class="bi bi-trash"></i>
-      </button>
-    </td>
-  `;
-  
-  tbody.appendChild(tr);
-  
-  // Agregar evento de eliminación
-  tr.querySelector('.btn-eliminar').addEventListener('click', function() {
-    const index = parseInt(this.getAttribute('data-index'));
-    eliminarPartida(index);
-  });
-}
-
-// Eliminar partida
-function eliminarPartida(index) {
-  PARTIDAS_STATE.partidas.splice(index, 1);
-  renderizarPartidas();
-  actualizarCalculosGenerales();
-  actualizarFechas();
-}
-
-// Renderizar todas las partidas
-function renderizarPartidas() {
-  const tbody = document.getElementById('tbody-partidas');
-  tbody.innerHTML = '';
-  
-  PARTIDAS_STATE.partidas.forEach((partida, index) => {
-    agregarPartidaATabla(partida, index);
-  });
-}
-
-// Actualizar información de fechas
-function actualizarFechas() {
-  const ahora = new Date().toISOString();
-  if (!PARTIDAS_STATE.fechaCreacion) {
-    PARTIDAS_STATE.fechaCreacion = ahora;
-  }
-  PARTIDAS_STATE.fechaActualizacion = ahora;
-  
-  document.getElementById('fecha-creacion').textContent = formatearFecha(PARTIDAS_STATE.fechaCreacion);
-  document.getElementById('fecha-actualizacion').textContent = formatearFecha(PARTIDAS_STATE.fechaActualizacion);
-}
-
-// Preguntar por IVA
-async function preguntarIVA() {
-  if (PARTIDAS_STATE.partidas.length === 0) return;
-  
-  const { value: aceptaIVA } = await Swal.fire({
-    title: '¿Aplicar IVA?',
-    text: '¿Desea aplicar el 16% de IVA al subtotal?',
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'Sí, aplicar IVA',
-    cancelButtonText: 'No, sin IVA',
-    confirmButtonColor: '#198754',
-    cancelButtonColor: '#6c757d'
-  });
-  
-  PARTIDAS_STATE.ivaAplicado = aceptaIVA;
-  actualizarCalculosGenerales();
-  actualizarFechas();
-}
-
-// Limpiar formulario
-function limpiarFormulario() {
-  document.getElementById('form-partida-detalle').reset();
-  document.getElementById('importe-total').value = '';
-}
-
-// Guardar partidas en la base de datos
-async function guardarPartidas() {
-  if (!PARTIDAS_STATE.proyectoId) {
-    Swal.fire({
-      title: 'Error',
-      text: 'Por favor ingrese un ID de proyecto',
-      icon: 'error',
-      confirmButtonText: 'Aceptar'
-    });
-    return;
-  }
-
-  if (PARTIDAS_STATE.partidas.length === 0) {
-    Swal.fire({
-      title: 'Error',
-      text: 'No hay partidas para guardar',
-      icon: 'warning',
-      confirmButtonText: 'Aceptar'
-    });
-    return;
-  }
-
-  try {
-    const datos = {
-      proyectoId: PARTIDAS_STATE.proyectoId,
-      partidas: PARTIDAS_STATE.partidas,
-      ivaAplicado: PARTIDAS_STATE.ivaAplicado,
-      fechaPartida: PARTIDAS_STATE.fechaPartida,
-      fechaCreacion: PARTIDAS_STATE.fechaCreacion,
-      fechaActualizacion: PARTIDAS_STATE.fechaActualizacion
-    };
-
-    const resultado = await apiPost('/api/partidas', datos);
-    
-    Swal.fire({
-      title: 'Éxito',
-      text: 'Partidas guardadas correctamente en la base de datos',
-      icon: 'success',
-      confirmButtonText: 'Aceptar'
-    });
-    
-    return resultado;
-  } catch (error) {
-    Swal.fire({
-      title: 'Error',
-      text: 'No se pudieron guardar las partidas: ' + error.message,
-      icon: 'error',
-      confirmButtonText: 'Aceptar'
-    });
-    throw error;
-  }
-}
-
-// Cargar partidas desde la base de datos
-async function cargarPartidas() {
-  const proyectoId = document.getElementById('proyecto-id').value.trim();
-  
-  if (!proyectoId) {
-    Swal.fire({
-      title: 'Error',
-      text: 'Por favor ingrese un ID de proyecto',
-      icon: 'error',
-      confirmButtonText: 'Aceptar'
-    });
-    return;
-  }
-
-  try {
-    const partidas = await apiGet(`/api/partidas?proyectoId=${encodeURIComponent(proyectoId)}`);
-    
-    PARTIDAS_STATE.proyectoId = proyectoId;
-    PARTIDAS_STATE.partidas = partidas.partidas || [];
-    PARTIDAS_STATE.ivaAplicado = partidas.ivaAplicado || false;
-    PARTIDAS_STATE.fechaPartida = partidas.fechaPartida || '';
-    PARTIDAS_STATE.fechaCreacion = partidas.fechaCreacion || '';
-    PARTIDAS_STATE.fechaActualizacion = partidas.fechaActualizacion || '';
-    
-    renderizarPartidas();
-    actualizarCalculosGenerales();
-    actualizarFechas();
-    
-    // Actualizar campos del formulario
-    document.getElementById('fecha-partida').value = PARTIDAS_STATE.fechaPartida;
-    
-    Swal.fire({
-      title: 'Éxito',
-      text: `Se cargaron ${PARTIDAS_STATE.partidas.length} partidas`,
-      icon: 'success',
-      timer: 2000,
-      showConfirmButton: false
-    });
-    
-  } catch (error) {
-    Swal.fire({
-      title: 'Error',
-      text: 'No se pudieron cargar las partidas: ' + error.message,
-      icon: 'error',
-      confirmButtonText: 'Aceptar'
-    });
-  }
-}
-
-// Exportar a Excel
-function exportarAExcel() {
-  if (PARTIDAS_STATE.partidas.length === 0) {
-    Swal.fire({
-      title: 'No hay datos',
-      text: 'No hay partidas para exportar',
-      icon: 'warning',
-      confirmButtonText: 'Entendido'
-    });
-    return;
-  }
-  
-  // Crear workbook
-  const wb = XLSX.utils.book_new();
-  
-  // Preparar datos
-  const datos = PARTIDAS_STATE.partidas.map((partida, index) => ({
-    'No.': index + 1,
-    'Cantidad': partida.cantidad,
-    'Unidad de Medida': partida.unidadMedida,
-    'Descripción': partida.descripcion,
-    'Precio Unitario': partida.precioUnitario,
-    'Importe Total': partida.importeTotal
-  }));
-  
-  // Agregar totales
-  const subtotal = PARTIDAS_STATE.partidas.reduce((sum, partida) => sum + partida.importeTotal, 0);
-  const iva = PARTIDAS_STATE.ivaAplicado ? subtotal * 0.16 : 0;
-  const total = subtotal + iva;
-  
-  datos.push(
-    {},
-    { 'Descripción': 'SUBTOTAL:', 'Importe Total': subtotal },
-    { 'Descripción': 'IVA (16%):', 'Importe Total': iva },
-    { 'Descripción': 'TOTAL:', 'Importe Total': total },
-    { 'Descripción': 'TOTAL EN LETRAS:', 'Importe Total': numeroALetras(total) },
-    {},
-    { 'Descripción': 'PROYECTO ID:', 'Importe Total': PARTIDAS_STATE.proyectoId },
-    { 'Descripción': 'FECHA PARTIDA:', 'Importe Total': PARTIDAS_STATE.fechaPartida },
-    { 'Descripción': 'FECHA CREACIÓN:', 'Importe Total': formatearFecha(PARTIDAS_STATE.fechaCreacion) },
-    { 'Descripción': 'FECHA ACTUALIZACIÓN:', 'Importe Total': formatearFecha(PARTIDAS_STATE.fechaActualizacion) }
-  );
-  
-  const ws = XLSX.utils.json_to_sheet(datos);
-  XLSX.utils.book_append_sheet(wb, ws, 'Partidas Detalladas');
-  
-  // Descargar archivo
-  const fechaExportacion = new Date().toISOString().split('T')[0];
-  XLSX.writeFile(wb, `partidas_detalladas_${PARTIDAS_STATE.proyectoId}_${fechaExportacion}.xlsx`);
-  
+// ===== UI helpers =====
+function banner(msg, type='info') {
+  const iconMap = { info:'info', success:'success', warning:'warning', danger:'error' };
+  const titleMap = { info:'Información', success:'Éxito', warning:'Advertencia', danger:'Error' };
   Swal.fire({
-    title: 'Éxito',
-    text: 'Partidas exportadas correctamente',
-    icon: 'success',
-    timer: 2000,
-    showConfirmButton: false
+    icon: iconMap[type] || 'info',
+    title: titleMap[type] || 'Información',
+    html: msg,
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 8000,
+    timerProgressBar: true,
+    background: '#1a1a1a',
+    color: '#ffffff'
   });
 }
+const showSpinner = (v) => document.getElementById('spinner').style.display = v ? 'block' : 'none';
 
-// Filtrar partidas
-function filtrarPartidas() {
-  const busqueda = document.getElementById('buscar-partidas').value.toLowerCase();
-  const filas = document.querySelectorAll('#tbody-partidas tr');
-  
-  filas.forEach(fila => {
-    const textoFila = fila.textContent.toLowerCase();
-    fila.style.display = textoFila.includes(busqueda) ? '' : 'none';
-  });
+// ===== Carga de datos =====
+async function loadProyecto(proj) {
+  STATE.proyecto = proj;
+  localStorage.setItem(LS_PROJECT_KEY, proj);
+
+  // 1) Cargar partidas del proyecto para llenar el <select>
+  const detalles = await apiGet('/api/detalles?project=' + encodeURIComponent(proj));
+  STATE.partidas = detalles.map(d => ({
+    partida: d.partida,
+    presupuesto: Number(d.presupuesto || 0),
+    saldo: Number(d.saldo_disponible || 0),
+    gastado: Number(d.total_gastado || 0),
+    recon: Number(d.total_reconducido || 0)
+  }));
+
+  // 2) Cargar gastos (nueva tabla gastos_detalle)
+  //   Endpoint esperado: GET /api/gastos?project=ID  -> [{id, fecha, descripcion, partida, monto}]
+  STATE.gastos = await apiGet('/api/gastos?project=' + encodeURIComponent(proj));
 }
 
-// Event Listeners
-document.addEventListener('DOMContentLoaded', function() {
-  // Mostrar fecha actual
-  document.getElementById('fecha-actual').textContent = mostrarFechaActual();
-  document.getElementById('fecha-partida').value = obtenerFechaActual();
-  PARTIDAS_STATE.fechaPartida = obtenerFechaActual();
-  
-  // Calcular importe total automáticamente
-  document.getElementById('cantidad').addEventListener('input', calcularImporteTotal);
-  document.getElementById('precio-unitario').addEventListener('input', calcularImporteTotal);
-  
-  // Actualizar fecha de partida
-  document.getElementById('fecha-partida').addEventListener('change', function() {
-    PARTIDAS_STATE.fechaPartida = this.value;
-    actualizarFechas();
-  });
-  
-  // Formulario de partida
-  document.getElementById('form-partida-detalle').addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const cantidad = parseFloat(document.getElementById('cantidad').value);
-    const unidadMedida = document.getElementById('unidad-medida').value.trim();
-    const descripcion = document.getElementById('descripcion').value.trim();
-    const precioUnitario = parseFloat(document.getElementById('precio-unitario').value);
-    const importeTotal = calcularImporteTotal();
-    
-    if (!cantidad || !unidadMedida || !descripcion || !precioUnitario) {
-      Swal.fire({
-        title: 'Error',
-        text: 'Por favor complete todos los campos',
-        icon: 'error',
-        confirmButtonText: 'Aceptar'
-      });
-      return;
-    }
-    
-    const nuevaPartida = {
-      cantidad,
-      unidadMedida,
-      descripcion,
-      precioUnitario,
-      importeTotal
-    };
-    
-    PARTIDAS_STATE.partidas.push(nuevaPartida);
-    renderizarPartidas();
-    actualizarCalculosGenerales();
-    actualizarFechas();
-    limpiarFormulario();
-    
-    // Preguntar por IVA si es la primera partida
-    if (PARTIDAS_STATE.partidas.length === 1) {
-      preguntarIVA();
-    }
-    
-    Swal.fire({
-      title: 'Éxito',
-      text: 'Partida agregada correctamente',
-      icon: 'success',
-      timer: 2000,
-      showConfirmButton: false
+function renderPartidasSelect() {
+  const sel = document.getElementById('g-partida');
+  sel.innerHTML = '<option value="" disabled selected>Selecciona una partida</option>';
+  STATE.partidas
+    .map(p => p.partida)
+    .sort((a,b) => a.localeCompare(b))
+    .forEach(clave => {
+      const opt = document.createElement('option');
+      opt.value = clave;
+      opt.textContent = clave;
+      sel.appendChild(opt);
     });
-  });
-  
-  // Botón limpiar todo
-  document.getElementById('btn-limpiar-partidas').addEventListener('click', function() {
-    Swal.fire({
-      title: '¿Está seguro?',
-      text: 'Esta acción eliminará todas las partidas',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Sí, limpiar todo',
-      cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#dc3545'
-    }).then((result) => {
-      if (result.isConfirmed) {
-        PARTIDAS_STATE.partidas = [];
-        PARTIDAS_STATE.ivaAplicado = false;
-        PARTIDAS_STATE.fechaCreacion = '';
-        PARTIDAS_STATE.fechaActualizacion = '';
-        renderizarPartidas();
-        actualizarCalculosGenerales();
-        actualizarFechas();
-        limpiarFormulario();
-        
-        Swal.fire({
-          title: 'Limpiado',
-          text: 'Todas las partidas han sido eliminadas',
-          icon: 'success',
-          timer: 2000,
-          showConfirmButton: false
-        });
+}
+
+function renderGastos() {
+  const filtrosDesc = (document.getElementById('f-buscar').value || '').trim().toLowerCase();
+  const tbody = document.querySelector('#tabla-gastos tbody');
+  const tfootTotal = document.getElementById('tfoot-total');
+  tbody.innerHTML = '';
+
+  let total = 0;
+  STATE.gastos
+    .filter(g => !filtrosDesc || String(g.descripcion || '').toLowerCase().includes(filtrosDesc))
+    .sort((a,b) => {
+      const ta = a.fecha ? new Date(a.fecha).getTime() : 0;
+      const tb = b.fecha ? new Date(b.fecha).getTime() : 0;
+      return tb - ta; // más reciente primero
+    })
+    .forEach(g => {
+      total += Number(g.monto || 0);
+      const d = g.fecha ? `${String(new Date(g.fecha).getUTCDate()).padStart(2,'0')}/${MES[new Date(g.fecha).getUTCMonth()]}/${new Date(g.fecha).getUTCFullYear()}` : '—';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${d}</td>
+        <td>${escapeHtml(g.descripcion || '')}</td>
+        <td>${escapeHtml(g.partida || '')}</td>
+        <td class="text-end">${money(g.monto)}</td>
+        <td class="text-end">
+          <button class="btn btn-outline-danger btn-sm" data-id="${g.id}">
+            <i class="bi bi-trash"></i>
+          </button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+  tfootTotal.textContent = money(total);
+  document.getElementById('kpi-gastos-cantidad').textContent = String(STATE.gastos.length);
+  document.getElementById('kpi-gastos-total').textContent = money(total);
+
+  // bind borrar
+  tbody.querySelectorAll('button[data-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      const ok = await Swal.fire({
+        icon: 'warning',
+        title: 'Eliminar gasto',
+        text: '¿Deseas eliminar este gasto?',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+        background: '#1a1a1a',
+        color: '#fff'
+      });
+      if (!ok.isConfirmed) return;
+      try {
+        await apiDelete(`/api/gastos/${id}`);
+        await refresh();
+        banner('Gasto eliminado', 'success');
+      } catch (e) {
+        banner(e.message, 'danger');
       }
     });
   });
-  
-  // Botón exportar
-  document.getElementById('btn-export-partidas').addEventListener('click', exportarAExcel);
-  
-  // Botón guardar
-  document.getElementById('btn-guardar-partidas').addEventListener('click', guardarPartidas);
-  
-  // Botón cargar partidas
-  document.getElementById('btn-cargar-partidas').addEventListener('click', cargarPartidas);
-  
-  // Buscar partidas
-  document.getElementById('buscar-partidas').addEventListener('input', filtrarPartidas);
-  
-  // Botón para cambiar IVA
-  document.getElementById('iva').addEventListener('click', function() {
-    preguntarIVA();
-  });
-  
-  // Inicializar fechas
-  actualizarFechas();
+}
+
+async function refresh() {
+  const proj = STATE.proyecto || (document.getElementById('proj-code').value || '').trim();
+  if (!proj) return;
+  showSpinner(true);
+  try {
+    await loadProyecto(proj);
+    renderPartidasSelect();
+    renderGastos();
+  } catch (e) {
+    banner('No se pudo cargar información del proyecto. ' + e.message, 'danger');
+  } finally {
+    showSpinner(false);
+  }
+}
+
+// ===== Eventos =====
+document.getElementById('nav-search').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const val = (document.getElementById('proj-code').value || '').trim();
+  if (!val) return;
+  await refresh();
+});
+
+document.getElementById('btn-volver').addEventListener('click', () => {
+  const proj = STATE.proyecto || localStorage.getItem(LS_PROJECT_KEY) || '';
+  const url = proj ? `index.html?project=${encodeURIComponent(proj)}` : 'index.html';
+  window.location.href = url;
+});
+
+document.getElementById('btn-filtrar').addEventListener('click', renderGastos);
+document.getElementById('btn-limpiar').addEventListener('click', () => {
+  document.getElementById('f-buscar').value = '';
+  renderGastos();
+});
+
+document.getElementById('btn-export-xlsx').addEventListener('click', () => {
+  const wb = XLSX.utils.book_new();
+  const sh = XLSX.utils.json_to_sheet(
+    STATE.gastos.map(g => ({
+      Fecha: g.fecha ? new Date(g.fecha).toISOString().slice(0,10) : '',
+      Descripción: g.descripcion,
+      Partida: g.partida,
+      Monto: Number(g.monto || 0)
+    }))
+  );
+  XLSX.utils.book_append_sheet(wb, sh, 'Gastos');
+  const proj = STATE.proyecto || 'proyecto';
+  XLSX.writeFile(wb, `gastos_${proj.replace(/[^a-z0-9_\-]+/gi,'_')}.xlsx`);
+});
+
+// Registrar gasto
+document.getElementById('form-gasto').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const project = STATE.proyecto || (document.getElementById('proj-code').value || '').trim();
+  const fecha = document.getElementById('g-fecha').value || null;
+  const descripcion = document.getElementById('g-desc').value.trim();
+  const partida = document.getElementById('g-partida').value;
+  const monto = parseFloat(document.getElementById('g-monto').value);
+
+  if (!project) return banner('Captura el ID de proyecto antes de registrar', 'warning');
+  if (!partida || !descripcion || isNaN(monto) || monto <= 0) return banner('Completa partida, descripción y monto válido', 'warning');
+
+  try {
+    await apiPost('/api/gastos', { project, partida, fecha, descripcion, monto });
+    await refresh();
+    banner('Gasto registrado', 'success');
+    ev.target.reset();
+    document.getElementById('g-partida').value = '';
+  } catch (e) {
+    banner(e.message, 'danger');
+  }
+});
+
+// ===== Init =====
+window.addEventListener('DOMContentLoaded', async () => {
+  // set defaults
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('g-fecha').value = today;
+
+  // resolver proyecto por prioridad: query ?project= , input, localStorage
+  const params = new URLSearchParams(window.location.search);
+  const qProject = params.get('project');
+  const memProject = localStorage.getItem(LS_PROJECT_KEY);
+  const proj = qProject || memProject || '';
+
+  if (proj) document.getElementById('proj-code').value = proj;
+
+  if (proj) {
+    await refresh();
+  }
 });

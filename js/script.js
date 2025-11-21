@@ -1069,11 +1069,10 @@ document
   .getElementById("btn-export-xlsx")
   .addEventListener("click", exportXlsx);
 
-// Al principio del DOMContentLoaded, antes de loadFromAPI():
 window.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
   const qProject = params.get("project");
-  const memProject = localStorage.getItem("cp_current_project"); // mismo key que usa partidas.html
+  const memProject = localStorage.getItem("cp_current_project"); 
   const input = document.getElementById("proj-code");
 
   if (qProject) {
@@ -1084,7 +1083,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
 
   const today = new Date().toISOString().split("T")[0];
-  const gFecha = document.getElementById("g-fecha"); // ya no existe, no pasa nada si es null
+  const gFecha = document.getElementById("g-fecha"); 
   const rFecha = document.getElementById("r-fecha");
   const pMes = document.getElementById("p-mes");
   if (gFecha) gFecha.value = today;
@@ -1094,7 +1093,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   try {
     if ((input.value || "").trim()) {
       await loadFromAPI();
-      banner("Datos cargados desde PostgreSQL.", "info");
+      banner("Datos Cargados.", "info");
     } else {
       STATE.presupuesto = [];
       STATE.gastos = [];

@@ -407,7 +407,7 @@ document.getElementById('file-import-json').addEventListener('change', (ev)=>{
       STATE.gastos = (data.gastos || []).map(g => ({...g, fecha: g.fecha? new Date(g.fecha): null}));
       STATE.recon = data.recon || [];
       renderAll();
-      banner('Datos importados.','success');
+      banner('Datos Importados.','success');
     }catch(e){ console.error(e); banner('JSON inválido','danger'); }
   };
   reader.readAsText(f, 'utf-8');
@@ -417,11 +417,11 @@ document.getElementById('btn-reset').addEventListener('click', ()=>{
   resetLS();
   STATE.presupuesto = []; STATE.gastos = []; STATE.recon = [];
   renderAll();
-  banner('Datos reiniciados.','warning');
+  banner('Datos Reiniciados.','warning');
 });
 
 window.addEventListener('DOMContentLoaded', async ()=>{
-  try { await loadFromAPI(); banner('Datos cargados desde PostgreSQL.','info'); }
+  try { await loadFromAPI(); banner('Datos Cargados.','info'); }
   catch(e){ banner('No se pudo conectar al backend. Revisa que el servidor esté corriendo.','danger'); }
   renderAll();
 });

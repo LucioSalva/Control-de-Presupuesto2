@@ -1,12 +1,17 @@
-﻿// ===== utilidades =====
-const money = (v) => {
+﻿// =====================================================
+//  CONFIGURACIÓN Y UTILIDADES BÁSICAS
+// =====================================================
+
+// Formato de dinero
+function money(v) {
   if (v === undefined || v === null || isNaN(v)) return "—";
   return Number(v).toLocaleString("es-MX", {
     style: "currency",
     currency: "MXN",
     maximumFractionDigits: 2,
   });
-};
+}
+
 const MES = [
   "Ene",
   "Feb",
@@ -21,11 +26,16 @@ const MES = [
   "Nov",
   "Dic",
 ];
+
 const LS_KEY = "cp_app_data_v1";
-const normalizeKey = (value) =>
-  String(value || "")
+const PROJECT_KEYS_KEY = "cp_current_project_keys";
+const API_URL = "http://localhost:3000";
+
+function normalizeKey(value) {
+  return String(value || "")
     .trim()
     .toLowerCase();
+}
 
 const STATE = {
   presupuesto: [],
@@ -36,9 +46,31 @@ const STATE = {
   highlightPartida: null,
   highlightNeedsScroll: false,
   missingRows: [],
+  projectKeys: null,
 };
 
-// SweetAlert2
+// Escapar HTML
+function escapeHtml(s) {
+  return String(s).replace(
+    /[&<>\"']/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      }[c])
+  );
+}
+
+// Spinner global
+const showSpinner = (v) => {
+  const el = document.getElementById("spinner");
+  if (el) el.style.display = v ? "block" : "none";
+};
+
+// SweetAlert2 genérico
 function banner(msg, type = "info") {
   const iconMap = {
     info: "info",
@@ -75,12 +107,15 @@ function banner(msg, type = "info") {
 }
 
 function showNegativeBalanceAlert(partidasNegativas) {
-  if (partidasNegativas.length === 0) return;
+  if (!Array.isArray(partidasNegativas) || partidasNegativas.length === 0)
+    return;
+
   const partidasList = partidasNegativas
     .map(
       (p) => `• <strong>${escapeHtml(p.partida)}</strong>: ${money(p.saldo)}`
     )
     .join("<br>");
+
   Swal.fire({
     icon: "warning",
     title: "¡Atención! Números Negativos",
@@ -92,24 +127,16 @@ function showNegativeBalanceAlert(partidasNegativas) {
   });
 }
 
-const showSpinner = (v) =>
-  (document.getElementById("spinner").style.display = v ? "block" : "none");
-const escapeHtml = (s) =>
-  String(s).replace(
-    /[&<>\"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[
-        c
-      ])
-  );
-// === API base ===
-const API_URL = "http://localhost:3000";
+// =====================================================
+//  HELPERS DE API
+// =====================================================
 
 async function apiGet(path) {
   const r = await fetch(API_URL + path);
   if (!r.ok) throw new Error("GET " + path + " " + r.status);
   return r.json();
 }
+
 async function apiPost(path, body) {
   const r = await fetch(API_URL + path, {
     method: "POST",
@@ -120,6 +147,7 @@ async function apiPost(path, body) {
   if (!r.ok || data.error) throw new Error(data.error || "POST " + path);
   return data;
 }
+
 async function apiDelete(path) {
   const r = await fetch(API_URL + path, { method: "DELETE" });
   const d = await r.json().catch(() => ({}));
@@ -127,26 +155,130 @@ async function apiDelete(path) {
   return d;
 }
 
-// Función para verificar partida duplicada por mes
-async function checkDuplicatePartida(partida, monto, mes, project) {
-  if (!partida || !mes || !project) return false;
+// =====================================================
+//  CREAR PROYECTO (CATÁLOGOS)
+// =====================================================
+
+const PROJECT_CATALOGS = {
+  dgeneral: [],
+  dauxiliar: [],
+  fuentes: [],
+  proyectos: [],
+};
+let projectCatalogsLoaded = false;
+
+// Rellena un <select> con filas de catálogo
+function fillCatalogSelect(selectId, rows, labelFn) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  // mantiene el primer option ("Seleccione...")
+  sel.length = 1;
+  rows.forEach((row) => {
+    const opt = document.createElement("option");
+    opt.value = row.id; // usamos ID numérico como value
+    opt.textContent = labelFn(row);
+    sel.appendChild(opt);
+  });
+}
+
+// Cargar catálogos desde el backend (una sola vez)
+async function loadProjectCatalogs() {
+  if (projectCatalogsLoaded) return;
+
   try {
-    const qs = `?project=${encodeURIComponent(
-      project
-    )}&mes=${encodeURIComponent(mes)}`;
-    const detalles = await apiGet("/api/detalles" + qs);
-    return detalles.some(
-      (d) =>
-        normalizeKey(d.partida) === normalizeKey(partida) &&
-        Math.abs(Number(d.presupuesto) - monto) < 0.01
+    const [dg, da, fu, prj] = await Promise.all([
+      apiGet("/api/catalogos/dgeneral"),
+      apiGet("/api/catalogos/dauxiliar"),
+      apiGet("/api/catalogos/fuentes"),
+      apiGet("/api/catalogos/proyectos"),
+    ]);
+
+    PROJECT_CATALOGS.dgeneral = dg;
+    PROJECT_CATALOGS.dauxiliar = da;
+    PROJECT_CATALOGS.fuentes = fu;
+    PROJECT_CATALOGS.proyectos = prj;
+
+    fillCatalogSelect("c-dgeneral", dg, (r) => `${r.clave} — ${r.dependencia}`);
+    fillCatalogSelect(
+      "c-dauxiliar",
+      da,
+      (r) => `${r.clave} — ${r.dependencia}`
     );
-  } catch (error) {
-    console.warn("Error al verificar duplicados:", error);
-    return false;
+    fillCatalogSelect("c-fuente", fu, (r) => `${r.clave} — ${r.fuente}`);
+    fillCatalogSelect(
+      "c-proyecto",
+      prj,
+      (r) => `${r.clave} — ${r.descripcion}`
+    );
+
+    projectCatalogsLoaded = true;
+  } catch (err) {
+    banner(
+      "No se pudieron cargar los catálogos del proyecto.<br>" +
+        escapeHtml(err.message),
+      "danger"
+    );
   }
 }
 
-/* ================== NORMALIZADOR DE RECONDUCCIONES (TODOS + SIN FALSOS) ================== */
+// Actualiza el resumen del proyecto en la tarjeta de creación
+function updateProjectSummaryBox() {
+  const getSelRow = (idSel, arr) => {
+    const sel = document.getElementById(idSel);
+    if (!sel || !sel.value) return null;
+    return arr.find((r) => String(r.id) === String(sel.value)) || null;
+  };
+
+  const resumen = [];
+  const dg = getSelRow("c-dgeneral", PROJECT_CATALOGS.dgeneral);
+  const da = getSelRow("c-dauxiliar", PROJECT_CATALOGS.dauxiliar);
+  const fu = getSelRow("c-fuente", PROJECT_CATALOGS.fuentes);
+  const prj = getSelRow("c-proyecto", PROJECT_CATALOGS.proyectos);
+
+  if (dg)
+    resumen.push(
+      `<strong>${escapeHtml(dg.clave)}</strong> — ${escapeHtml(dg.dependencia)}`
+    );
+  if (da)
+    resumen.push(
+      `<strong>${escapeHtml(da.clave)}</strong> — ${escapeHtml(da.dependencia)}`
+    );
+  if (fu)
+    resumen.push(
+      `<strong>${escapeHtml(fu.clave)}</strong> — ${escapeHtml(fu.fuente)}`
+    );
+  if (prj)
+    resumen.push(
+      `<strong>${escapeHtml(prj.clave)}</strong> — ${escapeHtml(
+        prj.descripcion
+      )}`
+    );
+
+  // 🧠 Construimos el ID de proyecto automáticamente
+  // Ajusta el formato si quieres (agregar guiones, etc.)
+  let idProyectoAuto = "";
+  if (dg && da && fu && prj) {
+    // ejemplo: L00 + 100 + 170301 + 010301010101
+    idProyectoAuto = `${dg.clave}${da.clave}${fu.clave}${prj.clave}`;
+  }
+
+  const box = document.getElementById("c-resumen");
+  if (box) {
+    box.innerHTML = resumen.length
+      ? resumen.join("<br>")
+      : "Completa los campos para ver el resumen…";
+  }
+
+  const idInput = document.getElementById("c-idproyecto");
+  if (idInput) {
+    idInput.value = idProyectoAuto; // el usuario ya NO escribe nada
+  }
+}
+
+// =====================================================
+//  NORMALIZADOR DE RECONDUCCIONES
+// =====================================================
+
 function mergeReconPairs(reconsRaw) {
   if (!Array.isArray(reconsRaw) || !reconsRaw.length) return [];
 
@@ -164,7 +296,6 @@ function mergeReconPairs(reconsRaw) {
   };
   const toCents = (n) => Math.round(Number(n || 0) * 100);
 
-  // Normaliza entradas
   const items = reconsRaw.map((r) => {
     const fecha = r?.fecha ? new Date(r.fecha) : null;
     const monto = Number(r?.monto || 0);
@@ -176,12 +307,11 @@ function mergeReconPairs(reconsRaw) {
       fecha,
       fechaKey: toDayISO(fecha),
       cents: toCents(monto),
-      origen: origen,
-      destino: destino,
+      origen,
+      destino,
     };
   });
 
-  // Agrupa por (concepto, fecha)
   const groups = new Map();
   for (const it of items) {
     const k = `${it.conceptoKey}|${it.fechaKey}`;
@@ -193,7 +323,6 @@ function mergeReconPairs(reconsRaw) {
   const TOL = 1; // 1 centavo
 
   for (const [, arr] of groups) {
-    // Cargos = negativos (origen), Abonos = positivos (destino)
     let debits = arr
       .filter((x) => x.cents < 0)
       .map((x) => ({
@@ -211,19 +340,16 @@ function mergeReconPairs(reconsRaw) {
         cents: x.cents,
       }));
 
-    // Ordena de mayor a menor
     debits.sort((a, b) => b.cents - a.cents);
     credits.sort((a, b) => b.cents - a.cents);
 
-    // Empareja todo lo posible
     while (debits.length && credits.length) {
       let d = debits[0];
 
-      // Mejor match: igual monto (±1 cent) o más cercano
       let idx = credits.findIndex((c) => Math.abs(c.cents - d.cents) <= TOL);
       if (idx === -1) {
-        let best = 0,
-          bestDiff = Math.abs(credits[0].cents - d.cents);
+        let best = 0;
+        let bestDiff = Math.abs(credits[0].cents - d.cents);
         for (let i = 1; i < credits.length; i++) {
           const diff = Math.abs(credits[i].cents - d.cents);
           if (diff < bestDiff) {
@@ -233,6 +359,7 @@ function mergeReconPairs(reconsRaw) {
         }
         idx = best;
       }
+
       const c = credits[idx];
       const used = Math.min(d.cents, c.cents);
 
@@ -251,9 +378,7 @@ function mergeReconPairs(reconsRaw) {
       if (c.cents <= 0 + TOL) credits.splice(idx, 1);
     }
 
-    // === Mostrar también los “antiguos” incompletos ===
-    // Solo agregamos el lado existente y marcamos como incompleto,
-    // pero NUNCA inventamos el otro lado ni ponemos origen=destino.
+    // movimientos incompletos viejos
     debits.forEach((d) => {
       if (d.cents > 0) {
         merged.push({
@@ -283,9 +408,32 @@ function mergeReconPairs(reconsRaw) {
   return merged;
 }
 
-// ===== Cargar desde BD =====
+// =====================================================
+//  CARGA DESDE BACKEND
+// =====================================================
+
+// Verificar partida duplicada por mes
+async function checkDuplicatePartida(partida, monto, mes, project) {
+  if (!partida || !mes || !project) return false;
+  try {
+    const qs = `?project=${encodeURIComponent(
+      project
+    )}&mes=${encodeURIComponent(mes)}`;
+    const detalles = await apiGet("/api/detalles" + qs);
+    return detalles.some(
+      (d) =>
+        normalizeKey(d.partida) === normalizeKey(partida) &&
+        Math.abs(Number(d.presupuesto) - monto) < 0.01
+    );
+  } catch (error) {
+    console.warn("Error al verificar duplicados:", error);
+    return false;
+  }
+}
+
+// Cargar presupuesto + gastos + reconducciones
 async function loadFromAPI() {
-  const project = (document.getElementById("proj-code").value || "").trim();
+  const project = (document.getElementById("proj-code")?.value || "").trim();
   if (!project) {
     STATE.presupuesto = [];
     STATE.gastos = [];
@@ -294,6 +442,7 @@ async function loadFromAPI() {
     STATE.highlightNeedsScroll = false;
     return;
   }
+
   const qs = "?project=" + encodeURIComponent(project);
   const detalles = await apiGet("/api/detalles" + qs);
 
@@ -344,107 +493,52 @@ async function loadFromAPI() {
   }
 }
 
-// ===== Render principal =====
-function renderAll() {
-  STATE.partitdasCatalog = new Set(STATE.presupuesto.map((p) => p.partida));
-  const filtros = getFiltros();
-  const porPartida = groupGastadoPorPartida(STATE.gastos, filtros);
+// =====================================================
+//  RENDER PRINCIPAL
+// =====================================================
 
-  const tbody = document.querySelector("#tabla-presupuesto tbody");
-  tbody.innerHTML = "";
-  let sumPres = 0,
-    sumGast = 0,
-    sumSaldo = 0;
-  const presFiltrado = STATE.presupuesto.filter(
-    (p) => !filtros.partida || p.partida.includes(filtros.partida)
-  );
+function getFiltros() {
+  return {
+    partida: (document.getElementById("f-partida")?.value || "").trim(),
+    busca: (document.getElementById("f-buscar")?.value || "")
+      .trim()
+      .toLowerCase(),
+  };
+}
 
-  const partidasNegativas = [];
-  presFiltrado.forEach((p) => {
-    const gastado = porPartida[p.partida] || 0;
-    const saldo =
-      typeof p.saldo === "number" ? p.saldo : p.presupuesto - gastado;
-    sumPres += p.presupuesto;
-    sumGast += gastado;
-    sumSaldo += saldo;
-    if (saldo < 0) partidasNegativas.push({ partida: p.partida, saldo });
-
-    const tr = document.createElement("tr");
-    tr.dataset.partida = p.partida;
-    if (saldo < 0) tr.classList.add("table-danger");
+function groupGastadoPorPartida(gastos, filtros) {
+  const out = {};
+  gastos.forEach((g) => {
     if (
-      STATE.highlightPartida &&
-      normalizeKey(p.partida) === STATE.highlightPartida
+      filtros.busca &&
+      !String(g.descripcion || "")
+        .toLowerCase()
+        .includes(filtros.busca)
     )
-      tr.classList.add("search-hit");
-    tr.innerHTML = `
-      <td class="fw-semibold">${p.partida}</td>
-      <td class="text-end">${money(p.presupuesto)}</td>
-      <td class="text-end">${money(gastado)}</td>
-      <td class="text-end ${saldo < 0 ? "text-danger fw-bold" : ""}">${money(
-      saldo
-    )}</td>
-    `;
+      return;
+    if (!g.partida) return;
+    out[g.partida] = (out[g.partida] || 0) + (g.monto || 0);
+  });
+  return out;
+}
+
+function renderMissing(rows) {
+  const tbody = document.querySelector("#tabla-missing tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  rows.forEach((r) => {
+    const d = r.fecha
+      ? `${String(r.fecha.getUTCDate()).padStart(2, "0")}/${
+          MES[r.fecha.getUTCMonth()]
+        }/${r.fecha.getUTCFullYear()}`
+      : "—";
+    const tr = document.createElement("tr");
+    tr.dataset.partida = r.partida;
+    tr.innerHTML = `<td>${d}</td><td>${escapeHtml(
+      r.descripcion || ""
+    )}</td><td class="text-end">${money(r.monto)}</td>`;
     tbody.appendChild(tr);
   });
-
-  if (partidasNegativas.length > 0) {
-    setTimeout(() => {
-      showNegativeBalanceAlert(partidasNegativas);
-    }, 600);
-  }
-
-  if (STATE.highlightNeedsScroll) {
-    const targetRow = tbody.querySelector("tr.search-hit");
-    if (targetRow)
-      targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
-    STATE.highlightNeedsScroll = false;
-  }
-
-  const trTot = document.createElement("tr");
-  trTot.innerHTML = `
-    <td class="fw-bold">TOTAL</td>
-    <td class="text-end fw-bold">${money(sumPres)}</td>
-    <td class="text-end fw-bold">${money(sumGast)}</td>
-    <td class="text-end fw-bold ${sumSaldo < 0 ? "text-danger" : ""}">${money(
-    sumSaldo
-  )}</td>`;
-  tbody.appendChild(trTot);
-
-  const presupuestoTotal = STATE.presupuesto.reduce(
-    (a, b) => a + (b.presupuesto || 0),
-    0
-  );
-  const gastadoTotal = STATE.gastos.reduce((a, b) => a + (b.monto || 0), 0);
-  const saldoTotal = STATE.presupuesto.reduce(
-    (a, b) =>
-      a +
-      (typeof b.saldo === "number"
-        ? b.saldo
-        : b.presupuesto - (porPartida[b.partida] || 0)),
-    0
-  );
-  const porc =
-    presupuestoTotal > 0 ? (gastadoTotal / presupuestoTotal) * 100 : 0;
-  document.getElementById("kpi-presupuesto").textContent =
-    money(presupuestoTotal);
-  document.getElementById("kpi-gastado").textContent = money(gastadoTotal);
-  document.getElementById("kpi-saldo").textContent = money(saldoTotal);
-  document.getElementById("kpi-porc").textContent = porc.toFixed(2) + "%";
-
-  const missing = STATE.gastos.filter(
-    (g) => !g.partida || !STATE.partitdasCatalog.has(g.partida)
-  );
-  STATE.missingRows = missing;
-  document.getElementById("missing-count").textContent = missing.length;
-  document.getElementById("missing-alert").style.display = missing.length
-    ? "block"
-    : "none";
-  renderMissing(missing);
-
-  renderChart();
-  renderMovimientos();
-  saveLS();
 }
 
 function showPartidaDetails(partidaTerm) {
@@ -470,46 +564,50 @@ function showPartidaDetails(partidaTerm) {
   return true;
 }
 
-function getFiltros() {
-  return {
-    partida: (document.getElementById("f-partida").value || "").trim(),
-    busca: (document.getElementById("f-buscar").value || "")
-      .trim()
-      .toLowerCase(),
-  };
-}
-function groupGastadoPorPartida(gastos, filtros) {
-  const out = {};
-  gastos.forEach((g) => {
-    if (
-      filtros.busca &&
-      !String(g.descripcion || "")
-        .toLowerCase()
-        .includes(filtros.busca)
-    )
-      return;
-    if (!g.partida) return;
-    out[g.partida] = (out[g.partida] || 0) + (g.monto || 0);
-  });
-  return out;
-}
+function buildMovimientos() {
+  const movs = [];
 
-function renderMissing(rows) {
-  const tbody = document.querySelector("#tabla-missing tbody");
-  tbody.innerHTML = "";
-  rows.forEach((r) => {
-    const d = r.fecha
-      ? `${String(r.fecha.getUTCDate()).padStart(2, "0")}/${
-          MES[r.fecha.getUTCMonth()]
-        }/${r.fecha.getUTCFullYear()}`
-      : "—";
-    const tr = document.createElement("tr");
-    tr.dataset.partida = r.partida;
-    tr.innerHTML = `<td>${d}</td><td>${escapeHtml(
-      r.descripcion || ""
-    )}</td><td class="text-end">${money(r.monto)}</td>`;
-    tbody.appendChild(tr);
+  STATE.recon.forEach((r) => {
+    movs.push({
+      tipo: "Reconducción",
+      concepto: r.concepto || "—",
+      origen: r.origen || "",
+      destino: r.destino || "",
+      monto: Number(r.monto) || 0,
+      fecha:
+        r.fecha instanceof Date ? r.fecha : r.fecha ? new Date(r.fecha) : null,
+      ts:
+        r.fecha instanceof Date
+          ? r.fecha.getTime()
+          : r.fecha
+          ? new Date(r.fecha).getTime()
+          : Date.now(),
+      _incompleta: !!r._incompleta,
+    });
   });
+
+  STATE.gastos.forEach((g) => {
+    const ts =
+      g.fecha instanceof Date
+        ? g.fecha.getTime()
+        : g.fecha
+        ? new Date(g.fecha).getTime()
+        : 0;
+    movs.push({
+      tipo: "Gasto",
+      concepto: g.descripcion || "—",
+      origen: "",
+      destino:
+        g.partida && g.partida.trim() ? g.partida.trim() : "(sin partida)",
+      monto: Number(g.monto) || 0,
+      fecha:
+        g.fecha instanceof Date ? g.fecha : g.fecha ? new Date(g.fecha) : null,
+      ts,
+    });
+  });
+
+  movs.sort((a, b) => b.ts - a.ts);
+  return movs;
 }
 
 function renderMovimientos() {
@@ -522,8 +620,7 @@ function renderMovimientos() {
     const tr = document.createElement("tr");
     tr.dataset.partida = m.destino;
 
-    // 👉 Si fue marcada como incompleta en mergeReconPairs, añadimos clase/etiqueta
-    if (m._incompleta) tr.classList.add("table-warning"); // opcional, solo color
+    if (m._incompleta) tr.classList.add("table-warning");
     const tipo = m._incompleta ? "Reconducción (incompleta)" : m.tipo;
 
     const fechaStr = m.fecha
@@ -545,6 +642,7 @@ function renderMovimientos() {
 }
 
 /* ===== Gráfica ===== */
+
 function buildChartData(group) {
   const ds = (label, data) => ({
     label,
@@ -662,64 +760,157 @@ function renderChart() {
   });
 }
 
-function buildMovimientos() {
-  const movs = [];
-  STATE.recon.forEach((r) => {
-    movs.push({
-      tipo: "Reconducción",
-      concepto: r.concepto || "—",
-      origen: r.origen || "",
-      destino: r.destino || "",
-      monto: Number(r.monto) || 0,
-      fecha:
-        r.fecha instanceof Date ? r.fecha : r.fecha ? new Date(r.fecha) : null,
-      ts:
-        r.fecha instanceof Date
-          ? r.fecha.getTime()
-          : r.fecha
-          ? new Date(r.fecha).getTime()
-          : Date.now(),
-    });
+// Render general
+function renderAll() {
+  STATE.partitdasCatalog = new Set(STATE.presupuesto.map((p) => p.partida));
+  const filtros = getFiltros();
+  const porPartida = groupGastadoPorPartida(STATE.gastos, filtros);
+
+  const tbody = document.querySelector("#tabla-presupuesto tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  let sumPres = 0,
+    sumGast = 0,
+    sumSaldo = 0;
+
+  const presFiltrado = STATE.presupuesto.filter(
+    (p) => !filtros.partida || p.partida.includes(filtros.partida)
+  );
+
+  const partidasNegativas = [];
+  presFiltrado.forEach((p) => {
+    const gastado = porPartida[p.partida] || 0;
+    const saldo =
+      typeof p.saldo === "number" ? p.saldo : p.presupuesto - gastado;
+    sumPres += p.presupuesto;
+    sumGast += gastado;
+    sumSaldo += saldo;
+    if (saldo < 0) partidasNegativas.push({ partida: p.partida, saldo });
+
+    const tr = document.createElement("tr");
+    tr.dataset.partida = p.partida;
+    if (saldo < 0) tr.classList.add("table-danger");
+    if (
+      STATE.highlightPartida &&
+      normalizeKey(p.partida) === STATE.highlightPartida
+    )
+      tr.classList.add("search-hit");
+    tr.innerHTML = `
+      <td class="fw-semibold">${escapeHtml(p.partida)}</td>
+      <td class="text-end">${money(p.presupuesto)}</td>
+      <td class="text-end">${money(gastado)}</td>
+      <td class="text-end ${saldo < 0 ? "text-danger fw-bold" : ""}">${money(
+      saldo
+    )}</td>
+    `;
+    tbody.appendChild(tr);
   });
-  STATE.gastos.forEach((g) => {
-    const ts =
-      g.fecha instanceof Date
-        ? g.fecha.getTime()
-        : g.fecha
-        ? new Date(g.fecha).getTime()
-        : 0;
-    movs.push({
-      tipo: "Gasto",
-      concepto: g.descripcion || "—",
-      origen: "",
-      destino:
-        g.partida && g.partida.trim() ? g.partida.trim() : "(sin partida)",
-      monto: Number(g.monto) || 0,
-      fecha:
-        g.fecha instanceof Date ? g.fecha : g.fecha ? new Date(g.fecha) : null,
-      ts,
-    });
-  });
-  movs.sort((a, b) => b.ts - a.ts);
-  return movs;
+
+  if (partidasNegativas.length > 0) {
+    setTimeout(() => {
+      showNegativeBalanceAlert(partidasNegativas);
+    }, 600);
+  }
+
+  if (STATE.highlightNeedsScroll) {
+    const targetRow = tbody.querySelector("tr.search-hit");
+    if (targetRow)
+      targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+    STATE.highlightNeedsScroll = false;
+  }
+
+  const trTot = document.createElement("tr");
+  trTot.innerHTML = `
+    <td class="fw-bold">TOTAL</td>
+    <td class="text-end fw-bold">${money(sumPres)}</td>
+    <td class="text-end fw-bold">${money(sumGast)}</td>
+    <td class="text-end fw-bold ${sumSaldo < 0 ? "text-danger" : ""}">${money(
+    sumSaldo
+  )}</td>`;
+  tbody.appendChild(trTot);
+
+  const presupuestoTotal = STATE.presupuesto.reduce(
+    (a, b) => a + (b.presupuesto || 0),
+    0
+  );
+  const gastadoTotal = STATE.gastos.reduce((a, b) => a + (b.monto || 0), 0);
+  const saldoTotal = STATE.presupuesto.reduce(
+    (a, b) =>
+      a +
+      (typeof b.saldo === "number"
+        ? b.saldo
+        : b.presupuesto - (porPartida[b.partida] || 0)),
+    0
+  );
+  const porc =
+    presupuestoTotal > 0 ? (gastadoTotal / presupuestoTotal) * 100 : 0;
+
+  document.getElementById("kpi-presupuesto").textContent =
+    money(presupuestoTotal);
+  document.getElementById("kpi-gastado").textContent = money(gastadoTotal);
+  document.getElementById("kpi-saldo").textContent = money(saldoTotal);
+  document.getElementById("kpi-porc").textContent = porc.toFixed(2) + "%";
+
+  const missing = STATE.gastos.filter(
+    (g) => !g.partida || !STATE.partitdasCatalog.has(g.partida)
+  );
+  STATE.missingRows = missing;
+  const missingCount = document.getElementById("missing-count");
+  if (missingCount) missingCount.textContent = missing.length;
+  const missingAlert = document.getElementById("missing-alert");
+  if (missingAlert)
+    missingAlert.style.display = missing.length ? "block" : "none";
+
+  renderMissing(missing);
+  renderChart();
+  renderMovimientos();
+  saveLS();
 }
 
-// ===== Formularios =====
+// =====================================================
+//  PERSISTENCIA LOCAL
+// =====================================================
+
+function saveLS() {
+  const data = {
+    presupuesto: STATE.presupuesto,
+    gastos: STATE.gastos.map((g) => ({
+      ...g,
+      fecha: g.fecha ? g.fecha.toISOString() : null,
+    })),
+    recon: STATE.recon.map((r) => ({
+      ...r,
+      fecha: r.fecha ? r.fecha.toISOString() : null,
+    })),
+  };
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(data));
+  } catch {
+    // ignore
+  }
+}
+
+// =====================================================
+//  FORMULARIOS PRINCIPALES
+// =====================================================
+
+// Formulario: agregar/actualizar partida
 document
   .getElementById("form-partida")
-  .addEventListener("submit", async (ev) => {
+  ?.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const clave = document.getElementById("p-partida").value.trim();
     const presupuesto = parseFloat(document.getElementById("p-monto").value);
     const mes = document.getElementById("p-mes").value;
-    const project = (document.getElementById("proj-code").value || "").trim();
+    const project = (document.getElementById("proj-code")?.value || "").trim();
 
     if (!project)
       return banner("Captura el ID de proyecto antes de registrar", "warning");
     if (!clave || isNaN(presupuesto) || !mes)
       return banner("Captura partida, presupuesto y mes válidos", "warning");
 
-    try {
+        try {
       const esDuplicado = await checkDuplicatePartida(
         clave,
         presupuesto,
@@ -750,12 +941,44 @@ document
           return;
         }
       }
-      await apiPost("/api/detalles", {
+
+      // 🔑 NUEVO: recuperar las llaves del proyecto
+      const keys =
+        STATE.projectKeys ||
+        (() => {
+          try {
+            return JSON.parse(
+              localStorage.getItem(PROJECT_KEYS_KEY) || "{}"
+            );
+          } catch {
+            return {};
+          }
+        })();
+
+      if (
+        !Number.isInteger(keys.id_dgeneral) ||
+        !Number.isInteger(keys.id_dauxiliar) ||
+        !Number.isInteger(keys.id_fuente)
+      ) {
+        banner(
+          "Este proyecto no tiene claves de dependencia/fuente.<br>" +
+            "Vuelve a crearlo desde <strong>Crear proyecto</strong>.",
+          "danger"
+        );
+        return;
+      }
+
+      const payload = {
         project,
         partida: clave,
         presupuesto,
         mes,
-      });
+        id_dgeneral: keys.id_dgeneral,
+        id_dauxiliar: keys.id_dauxiliar,
+        id_fuente: keys.id_fuente,
+      };
+
+      await apiPost("/api/detalles", payload);
       await loadFromAPI();
       renderAll();
       banner("Partida guardada", "success");
@@ -763,75 +986,91 @@ document
     } catch (e) {
       banner(e.message, "danger");
     }
+
   });
 
-document.getElementById("form-gasto").addEventListener("submit", async (ev) => {
-  ev.preventDefault();
-  const fecha = document.getElementById("g-fecha").value || null;
-  const descripcion = document.getElementById("g-desc").value.trim();
-  const partida = document.getElementById("g-partida").value.trim();
-  const monto = parseFloat(document.getElementById("g-monto").value);
-  const project = (document.getElementById("proj-code").value || "").trim();
-  if (!project)
-    return banner("Captura el ID de proyecto antes de registrar", "warning");
-  if (!partida || !descripcion || isNaN(monto) || monto <= 0)
-    return banner("Completa partida, descripción y monto válido", "warning");
-  try {
-    await apiPost("/api/gastos", {
-      project,
-      partida,
-      fecha,
-      descripcion,
-      monto,
-    });
-    await loadFromAPI();
-    renderAll();
-    banner("Gasto acumulado", "success");
-    ev.target.reset();
-  } catch (e) {
-    banner(e.message, "danger");
-  }
-});
+// Formulario: registrar gasto
+document
+  .getElementById("form-gasto")
+  ?.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const fecha = document.getElementById("g-fecha").value || null;
+    const descripcion = document.getElementById("g-desc").value.trim();
+    const partida = document.getElementById("g-partida").value.trim();
+    const monto = parseFloat(document.getElementById("g-monto").value);
+    const project = (document.getElementById("proj-code")?.value || "").trim();
 
-document.getElementById("form-recon").addEventListener("submit", async (ev) => {
-  ev.preventDefault();
-  const concepto = document.getElementById("r-concepto").value.trim();
-  const origen = document.getElementById("r-origen").value.trim();
-  const destino = document.getElementById("r-destino").value.trim();
-  const monto = parseFloat(document.getElementById("r-monto").value);
-  const fecha =
-    document.getElementById("r-fecha").value ||
-    new Date().toISOString().slice(0, 10);
-  const project = (document.getElementById("proj-code").value || "").trim();
-  if (!project)
-    return banner("Captura el ID de proyecto antes de registrar", "warning");
-  if (!origen || !destino || isNaN(monto) || monto <= 0)
-    return banner("Completa origen, destino y monto válido", "warning");
-  try {
-    const r = await apiPost("/api/reconducir", {
-      project,
-      origen,
-      destino,
-      monto,
-      concepto,
-      fecha,
-    });
-    if (r.origenNegativo)
-      banner(
-        `La partida ${origen} quedó en negativo (saldo: ${money(
-          r.saldos.origen
-        )})`,
-        "danger"
-      );
-    await loadFromAPI();
-    renderAll();
-    banner("Reconducción aplicada", "success");
-    ev.target.reset();
-  } catch (e) {
-    banner(e.message, "danger");
-  }
-});
+    if (!project)
+      return banner("Captura el ID de proyecto antes de registrar", "warning");
+    if (!partida || !descripcion || isNaN(monto) || monto <= 0)
+      return banner("Completa partida, descripción y monto válido", "warning");
 
+    try {
+      await apiPost("/api/gastos", {
+        project,
+        partida,
+        fecha,
+        descripcion,
+        monto,
+      });
+      await loadFromAPI();
+      renderAll();
+      banner("Gasto acumulado", "success");
+      ev.target.reset();
+    } catch (e) {
+      banner(e.message, "danger");
+    }
+  });
+
+// Formulario: reconducción
+document
+  .getElementById("form-recon")
+  ?.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const concepto = document.getElementById("r-concepto").value.trim();
+    const origen = document.getElementById("r-origen").value.trim();
+    const destino = document.getElementById("r-destino").value.trim();
+    const monto = parseFloat(document.getElementById("r-monto").value);
+    const fecha =
+      document.getElementById("r-fecha").value ||
+      new Date().toISOString().slice(0, 10);
+    const project = (document.getElementById("proj-code")?.value || "").trim();
+
+    if (!project)
+      return banner("Captura el ID de proyecto antes de registrar", "warning");
+    if (!origen || !destino || isNaN(monto) || monto <= 0)
+      return banner("Completa origen, destino y monto válido", "warning");
+
+    try {
+      const r = await apiPost("/api/reconducir", {
+        project,
+        origen,
+        destino,
+        monto,
+        concepto,
+        fecha,
+      });
+      if (r.origenNegativo)
+        banner(
+          `La partida ${escapeHtml(origen)} quedó en negativo (saldo: ${money(
+            r.saldos.origen
+          )})`,
+          "danger"
+        );
+      await loadFromAPI();
+      renderAll();
+      banner("Reconducción aplicada", "success");
+      ev.target.reset();
+    } catch (e) {
+      banner(e.message, "danger");
+    }
+  });
+
+// =====================================================
+//  BUSCADOR NAVBAR / FILTROS / RESET
+// =====================================================
+
+// Buscar proyecto/partida desde la barra
 const navSearchForm = document.getElementById("nav-search");
 if (navSearchForm) {
   navSearchForm.addEventListener("submit", async (ev) => {
@@ -843,13 +1082,11 @@ if (navSearchForm) {
       return;
     }
 
-    // Guarda para que index/partidas se “hablen”
     localStorage.setItem("cp_current_project", rawValue);
 
     showSpinner(true);
     try {
       await loadFromAPI();
-      // ... (resto igual que ya tienes)
 
       const key = normalizeKey(rawValue);
       const foundPartida = STATE.presupuesto.some(
@@ -858,6 +1095,7 @@ if (navSearchForm) {
       STATE.highlightPartida = foundPartida ? key : null;
       STATE.highlightNeedsScroll = foundPartida;
       renderAll();
+
       if (!STATE.presupuesto.length) {
         banner(
           `No se encontraron registros para <strong>${escapeHtml(
@@ -871,6 +1109,7 @@ if (navSearchForm) {
         showPartidaDetails(rawValue);
         return;
       }
+
       const totalPresupuesto = STATE.presupuesto.reduce(
         (acc, row) => acc + (row.presupuesto || 0),
         0
@@ -919,8 +1158,8 @@ if (navSearchForm) {
   });
 }
 
-// Filtros
-document.getElementById("btn-aplicar").addEventListener("click", renderAll);
+// Filtros tabla
+document.getElementById("btn-aplicar")?.addEventListener("click", renderAll);
 document.getElementById("btn-limpiar")?.addEventListener("click", () => {
   const fp = document.getElementById("f-partida");
   const fb = document.getElementById("f-buscar");
@@ -929,7 +1168,7 @@ document.getElementById("btn-limpiar")?.addEventListener("click", () => {
   renderAll();
 });
 
-// Reiniciar solo UI
+// Reset solo UI
 function clearUIOnly() {
   STATE.presupuesto = [];
   STATE.gastos = [];
@@ -942,7 +1181,7 @@ function clearUIOnly() {
   renderAll();
 }
 
-document.getElementById("btn-reset").addEventListener("click", async () => {
+document.getElementById("btn-reset")?.addEventListener("click", async () => {
   const result = await Swal.fire({
     title: "¿Limpiar vista?",
     text: "¿Limpiar la vista para capturar un nuevo ID de proyecto? (No se borrará nada de la base de datos)",
@@ -965,9 +1204,14 @@ document.getElementById("btn-reset").addEventListener("click", async () => {
   }
 });
 
-// Missing modal + export CSV
-document.getElementById("btn-ver-missing").addEventListener("click", () => {
-  const modal = new bootstrap.Modal("#modalMissing");
+// =====================================================
+//  MODAL "GASTOS SIN PARTIDA" + EXPORT CSV / XLSX
+// =====================================================
+
+document.getElementById("btn-ver-missing")?.addEventListener("click", () => {
+  const modalEl = document.getElementById("modalMissing");
+  if (!modalEl) return;
+  const modal = new bootstrap.Modal(modalEl);
   modal.show();
 });
 
@@ -998,16 +1242,18 @@ function exportMissingCsv() {
   URL.revokeObjectURL(url);
   banner("CSV exportado correctamente", "success");
 }
+
 document
   .getElementById("btn-export-missing")
-  .addEventListener("click", exportMissingCsv);
+  ?.addEventListener("click", exportMissingCsv);
 document
   .getElementById("btn-export-missing-footer")
-  .addEventListener("click", exportMissingCsv);
+  ?.addEventListener("click", exportMissingCsv);
 
-// Export Excel
+// Exportar todo a Excel
 function exportXlsx() {
   const wb = XLSX.utils.book_new();
+
   const shPartidas = XLSX.utils.json_to_sheet(
     STATE.presupuesto.map((p) => ({
       Partida: p.partida,
@@ -1060,30 +1306,148 @@ function exportXlsx() {
   XLSX.utils.book_append_sheet(wb, shKPIs, "KPIs");
 
   const code = (
-    document.getElementById("proj-code").value || "proyecto"
+    document.getElementById("proj-code")?.value || "proyecto"
   ).replace(/[^a-z0-9_\-]+/gi, "_");
   XLSX.writeFile(wb, `control_presupuesto_${code}.xlsx`);
   banner("Excel exportado correctamente", "success");
 }
 document
   .getElementById("btn-export-xlsx")
-  .addEventListener("click", exportXlsx);
+  ?.addEventListener("click", exportXlsx);
+
+// =====================================================
+//  UI "CREAR PROYECTO" (BOTONES + FORMULARIO)
+// =====================================================
+
+// Cambiar a modo "Crear proyecto"
+document.getElementById("btn-mode-new")?.addEventListener("click", async () => {
+  document.getElementById("project-mode-container")?.classList.add("d-none");
+  document
+    .getElementById("project-create-container")
+    ?.classList.remove("d-none");
+
+  await loadProjectCatalogs();
+  updateProjectSummaryBox();
+});
+
+// Cancelar creación y volver a modo normal
+document.getElementById("btn-cancel-create")?.addEventListener("click", () => {
+  document.getElementById("project-create-container")?.classList.add("d-none");
+  document.getElementById("project-mode-container")?.classList.remove("d-none");
+});
+
+// Botón "Buscar proyecto" (en la tarjeta de modos)
+document.getElementById("btn-mode-search")?.addEventListener("click", () => {
+  document.getElementById("proj-code")?.focus();
+});
+
+// Actualizar resumen al cambiar combos
+["c-dgeneral", "c-dauxiliar", "c-fuente", "c-proyecto"].forEach((id) => {
+  document.getElementById(id)?.addEventListener("change", () => {
+    updateProjectSummaryBox();
+  });
+});
+
+// Formulario "Usar este proyecto" en la tarjeta de crear proyecto
+document
+  .getElementById("form-create-project")
+  ?.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+
+    const idProyecto = (
+      document.getElementById("c-idproyecto")?.value || ""
+    ).trim();
+
+    const idDgeneral = parseInt(
+      document.getElementById("c-dgeneral")?.value || "0",
+      10
+    );
+    const idDauxiliar = parseInt(
+      document.getElementById("c-dauxiliar")?.value || "0",
+      10
+    );
+    const idFuente = parseInt(
+      document.getElementById("c-fuente")?.value || "0",
+      10
+    );
+
+    if (!idProyecto) {
+      banner("Captura un <strong>ID de proyecto</strong> válido.", "warning");
+      return;
+    }
+    if (!Number.isInteger(idDgeneral) || idDgeneral <= 0 ||
+        !Number.isInteger(idDauxiliar) || idDauxiliar <= 0 ||
+        !Number.isInteger(idFuente) || idFuente <= 0) {
+      banner("Selecciona Dependencia general, auxiliar y fuente.", "warning");
+      return;
+    }
+
+    // Guardamos las llaves en memoria y en localStorage
+    STATE.projectKeys = {
+      id_dgeneral: idDgeneral,
+      id_dauxiliar: idDauxiliar,
+      id_fuente: idFuente,
+      id_proyecto: idProyecto,
+    };
+    try {
+      localStorage.setItem(
+        PROJECT_KEYS_KEY,
+        JSON.stringify(STATE.projectKeys)
+      );
+    } catch {}
+
+    // Usamos ese código en el buscador de arriba
+    const inputProj = document.getElementById("proj-code");
+    if (inputProj) inputProj.value = idProyecto;
+    localStorage.setItem("cp_current_project", idProyecto);
+
+    // Volver al modo normal
+    document
+      .getElementById("project-create-container")
+      ?.classList.add("d-none");
+    document
+      .getElementById("project-mode-container")
+      ?.classList.remove("d-none");
+
+    banner(
+      `Proyecto <strong>${escapeHtml(
+        idProyecto
+      )}</strong> listo para capturar partidas.`,
+      "success"
+    );
+
+    try {
+      await loadFromAPI();
+      renderAll();
+    } catch (err) {
+      banner(
+        `No se pudo cargar la información del proyecto (${escapeHtml(
+          err.message
+        )}).`,
+        "danger"
+      );
+    }
+  });
+
+// =====================================================
+//  INICIALIZACIÓN (DOMContentLoaded)
+// =====================================================
 
 window.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
   const qProject = params.get("project");
-  const memProject = localStorage.getItem("cp_current_project"); 
+  const memProject = localStorage.getItem("cp_current_project");
   const input = document.getElementById("proj-code");
 
   if (qProject) {
-    input.value = qProject;
+    if (input) input.value = qProject;
     localStorage.setItem("cp_current_project", qProject);
-  } else if (memProject && !input.value) {
+  } else if (memProject && input && !input.value) {
     input.value = memProject;
   }
 
   const today = new Date().toISOString().split("T")[0];
-  const gFecha = document.getElementById("g-fecha"); 
+  const gFecha = document.getElementById("g-fecha");
   const rFecha = document.getElementById("r-fecha");
   const pMes = document.getElementById("p-mes");
   if (gFecha) gFecha.value = today;
@@ -1091,7 +1455,14 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (pMes) pMes.value = today.slice(0, 7);
 
   try {
-    if ((input.value || "").trim()) {
+    const savedKeys = localStorage.getItem(PROJECT_KEYS_KEY);
+    if (savedKeys) {
+      STATE.projectKeys = JSON.parse(savedKeys);
+    }
+  } catch {}
+
+  try {
+    if ((input?.value || "").trim()) {
       await loadFromAPI();
       banner("Datos Cargados.", "info");
     } else {
@@ -1108,9 +1479,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   renderAll();
 });
 
-// Cambiar proyecto
-document.getElementById("proj-code").addEventListener("change", async () => {
-  const project = (document.getElementById("proj-code").value || "").trim();
+// Cambio manual del ID proyecto en el input
+document.getElementById("proj-code")?.addEventListener("change", async () => {
+  const project = (document.getElementById("proj-code")?.value || "").trim();
   if (!project) {
     STATE.presupuesto = [];
     STATE.gastos = [];
@@ -1122,23 +1493,7 @@ document.getElementById("proj-code").addEventListener("change", async () => {
   renderAll();
 });
 
-// Persistencia local
-function saveLS() {
-  const data = {
-    presupuesto: STATE.presupuesto,
-    gastos: STATE.gastos.map((g) => ({
-      ...g,
-      fecha: g.fecha ? g.fecha.toISOString() : null,
-    })),
-    recon: STATE.recon.map((r) => ({
-      ...r,
-      fecha: r.fecha ? r.fecha.toISOString() : null,
-    })),
-  };
-  localStorage.setItem(LS_KEY, JSON.stringify(data));
-}
-
-/* Listeners gráfica */
+// Listeners de la gráfica
 document.getElementById("chart-group")?.addEventListener("change", renderChart);
 document
   .getElementById("chart-stacked")

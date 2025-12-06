@@ -13,49 +13,52 @@
   <!-- Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 
+  <!-- Estilos globales -->
+  <link rel="stylesheet" href="css/styles.css">
   <!-- Estilos propios -->
   <link rel="stylesheet" href="css/reporte-ejecucion.css">
 </head>
 
 <body>
+  <!-- NAVBAR PRINCIPAL -->
   <nav class="navbar navbar-expand-lg shadow-sm">
-  <div class="container-fluid">
-    <a class="navbar-brand fw-semibold">
-      <i class="bi bi-currency-dollar me-2"></i>Control Presupuestal
-    </a>
+    <div class="container-fluid">
+      <a class="navbar-brand fw-semibold">
+        <i class="bi bi-currency-dollar me-2"></i>Control Presupuestal
+      </a>
 
-    <!-- Buscar proyecto/partida -->
-    <form id="nav-search" class="nav-search" autocomplete="off">
-      <button type="submit" class="nav-search__btn" aria-label="Buscar ID">
-        <i class="bi bi-search"></i>
-      </button>
-      <input id="proj-code" type="text" name="proj-code"
-             class="form-control form-control-sm nav-search__input"
-             aria-label="ID del proyecto" placeholder="ID Presupuesto">
-    </form>
+      <!-- Buscar proyecto/partida -->
+      <form id="nav-search" class="nav-search" autocomplete="off">
+        <button type="submit" class="nav-search__btn" aria-label="Buscar ID">
+          <i class="bi bi-search"></i>
+        </button>
+        <input id="proj-code" type="text" name="proj-code"
+               class="form-control form-control-sm nav-search__input"
+               aria-label="ID del proyecto" placeholder="ID Presupuesto">
+      </form>
 
-    <div class="logo-container">
-      <img src="/public/img/ayuntamiento-de-ecatepec.png"
-           alt="Ayuntamiento de Ecatepec" class="navbar-logo">
+      <div class="logo-container">
+        <img src="/public/img/ayuntamiento-de-ecatepec.png"
+             alt="Ayuntamiento de Ecatepec" class="navbar-logo">
+      </div>
+
+      <div class="ms-auto d-flex gap-2 align-items-center">
+        <button id="btn-export-xlsx" class="btn btn-outline-success btn-sm">
+          <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+        </button>
+        <button id="btn-reset" class="btn btn-outline-danger btn-sm">
+          <i class="bi bi-eraser me-1"></i>Reiniciar
+        </button>
+      </div>
     </div>
-
-    <div class="ms-auto d-flex gap-2 align-items-center">
-      <button id="btn-export-xlsx" class="btn btn-outline-success btn-sm">
-        <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
-      </button>
-      <button id="btn-reset" class="btn btn-outline-danger btn-sm">
-        <i class="bi bi-eraser me-1"></i>Reiniciar
-      </button>
-    </div>
-  </div>
-</nav>
+  </nav>
 
 <!-- NAVBAR DE PESTAÑAS -->
 <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm" style="min-height: 40px;">
   <div class="container-fluid">
     <ul class="navbar-nav me-auto mb-2 mb-lg-0" style="flex-direction: row;">
       <li class="nav-item">
-        <a class="nav-link active" href="index.html">
+        <a class="nav-link" href="index.html">
           <i class="bi bi-house me-1"></i>Presupuesto
         </a>
       </li>
@@ -70,7 +73,7 @@
         </a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" href="reporte-ejecucion.html">
+        <a class="nav-link active" href="reporte-ejecucion.html">
           <i class="bi bi-diagram-3 me-1"></i>Ejecución
         </a>
       </li>

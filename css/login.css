@@ -1,0 +1,56 @@
+/* Fondo general */
+body {
+  background: #f0f2f5;
+  font-family: "Segoe UI", sans-serif;
+}
+
+/* Tarjeta */
+.login-card {
+  max-width: 420px;
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Encabezado */
+.login-header {
+  background: #003366;
+  color: white;
+  padding: 18px 20px;
+  text-align: center;
+}
+
+.login-header h5 {
+  font-weight: 700;
+  margin: 0;
+}
+
+.login-header small {
+  color: #cbd6e2;
+}
+
+/* Cuerpo */
+.login-body {
+  padding: 30px;
+  background: white;
+}
+
+/* Inputs */
+.form-control {
+  border-radius: 8px;
+}
+
+/* Botón */
+.btn-login {
+  border-radius: 8px;
+  padding: 10px;
+  font-weight: 600;
+}
+
+/* Alert */
+#loginError {
+  border-radius: 8px;
+  font-size: 0.9rem;
+  margin-top: -5px;
+}

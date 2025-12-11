@@ -1,4 +1,6 @@
-﻿// server.js (project alfanumérico)
+﻿// =====================================================
+//  IMPORTS Y CONFIG
+// =====================================================
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -73,6 +75,81 @@ async function getProjectKeys({
 
 // ---------- Salud ----------
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+/* =====================================================
+   LOGIN (simple, sin JWT por ahora)
+   ===================================================== */
+
+app.post("/api/login", async (req, res) => {
+  const { usuario, password } = req.body;
+
+  if (!usuario || !password) {
+    return res
+      .status(400)
+      .json({ error: "Usuario y contraseña son requeridos" });
+  }
+
+  try {
+    const sql = `
+      SELECT u.id,
+             u.nombre_completo,
+             u.usuario,
+             u.correo,
+             u.password,
+             u.id_dgeneral,
+             u.activo,
+             d.clave AS dgeneral_clave,
+             d.dependencia AS dgeneral_nombre,
+             ARRAY(
+               SELECT r.clave
+               FROM usuario_rol ur
+               JOIN roles r ON r.id = ur.id_rol
+               WHERE ur.id_usuario = u.id
+             ) AS roles
+      FROM usuarios u
+      LEFT JOIN dgeneral d ON d.id = u.id_dgeneral
+      WHERE u.usuario = $1
+      LIMIT 1;
+    `;
+
+    const result = await query(sql, [usuario]);
+
+    if (result.rowCount === 0) {
+      return res.status(401).json({ error: "Credenciales inválidas" });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.activo) {
+      return res.status(403).json({ error: "Usuario inactivo" });
+    }
+
+    // ⚠ SIN bcrypt, comparación directa (como tú quieres)
+    if (user.password !== password) {
+      return res.status(401).json({ error: "Credenciales inválidas" });
+    }
+
+    // Token "de mentiritas" solo para guardar algo en localStorage
+    const token = `token-${user.id}-${Date.now()}`;
+
+    return res.json({
+      token,
+      usuario: {
+        id: user.id,
+        nombre_completo: user.nombre_completo,
+        usuario: user.usuario,
+        correo: user.correo,
+        roles: user.roles,
+        id_dgeneral: user.id_dgeneral,
+        dgeneral_clave: user.dgeneral_clave,
+        dgeneral_nombre: user.dgeneral_nombre,
+      },
+    });
+  } catch (err) {
+    console.error("Error en /api/login:", err);
+    return res.status(500).json({ error: "Error interno" });
+  }
+});
 
 /* =====================================================
    DETALLES (partidas por proyecto)
@@ -696,18 +773,15 @@ app.delete("/api/project", async (req, res) => {
   }
 });
 
-/* =====================================================
-   LISTADO DE PROYECTOS (para projects.html)
-   ===================================================== */
-
-// GET /api/projects
-// Devuelve: [{ project, partidas, presupuesto_total, gastado_total, saldo_total }]
+// =====================================================
+//  PROYECTOS (LISTADO) - AHORA INCLUYE id_dgeneral
+// =====================================================
 app.get("/api/projects", async (_req, res) => {
   try {
-    const r = await query(
-      `
+    const r = await query(`
       SELECT
         id_proyecto                       AS project,
+        MIN(id_dgeneral)                  AS id_dgeneral,  -- clave de área
         COUNT(*)                          AS partidas,
         COALESCE(SUM(presupuesto),0)      AS presupuesto_total,
         COALESCE(SUM(total_gastado),0)    AS gastado_total,
@@ -715,14 +789,14 @@ app.get("/api/projects", async (_req, res) => {
       FROM presupuesto_detalle
       GROUP BY id_proyecto
       ORDER BY id_proyecto
-      `
-    );
+    `);
     res.json(r.rows);
-  } catch (e) {
-    console.error("GET /api/projects", e);
+  } catch (err) {
+    console.error("GET /api/projects", err);
     res.status(500).json({ error: "Error obteniendo proyectos" });
   }
 });
+
 
 /* =====================================================
    Checadores de duplicados
@@ -748,7 +822,7 @@ app.get("/api/check-duplicates", async (req, res) => {
 app.get("/api/check-recon-duplicates", async (req, res) => {
   try {
     const { project, origen, destino, monto } = req.query;
-  const result = await query(
+    const result = await query(
       `SELECT origen, destino, monto, fecha_reconduccion 
          FROM public.reconducciones 
         WHERE id_proyecto = $1 AND origen = $2 AND destino = $3 AND monto = $4 
@@ -836,8 +910,323 @@ app.get("/api/catalogos/proyectos", async (_req, res) => {
   }
 });
 
+// =====================================================
+//  ADMINISTRACIÓN DE USUARIOS (CRUD)
+//  (PÉGALO ANTES DE app.listen(...))
+// =====================================================
+
+// LISTAR usuarios
+app.get("/api/admin/usuarios", async (req, res) => {
+  try {
+    const r = await query(`
+      SELECT 
+        u.id,
+        u.nombre_completo,
+        u.usuario,
+        u.correo,
+        u.password,
+        u.id_dgeneral,
+        u.activo,
+        u.fecha_creacion,
+        d.dependencia AS dgeneral_nombre,
+        ARRAY(
+          SELECT r.clave
+          FROM usuario_rol ur
+          JOIN roles r ON r.id = ur.id_rol
+          WHERE ur.id_usuario = u.id
+        ) AS roles
+      FROM usuarios u
+      LEFT JOIN dgeneral d ON d.id = u.id_dgeneral
+      ORDER BY u.id;
+    `);
+
+    res.json(r.rows);
+  } catch (e) {
+    console.error("GET /api/admin/usuarios ERROR:", e);
+    res.status(500).json({ error: "Error obteniendo usuarios" });
+  }
+});
+
+// CREAR usuario
+app.post("/api/admin/usuarios", async (req, res) => {
+  const {
+    nombre_completo,
+    usuario,
+    correo,
+    password,
+    id_dgeneral,
+    activo = true,
+    roles = [],
+  } = req.body;
+
+  if (!nombre_completo || !usuario || !password) {
+    return res
+      .status(400)
+      .json({ error: "Nombre completo, usuario y contraseña son obligatorios" });
+  }
+
+  const client = await getClient();
+  try {
+    await client.query("BEGIN");
+
+    const ins = await client.query(
+      `
+      INSERT INTO usuarios (
+        nombre_completo,
+        usuario,
+        correo,
+        password,
+        id_dgeneral,
+        activo
+      )
+      VALUES ($1,$2,$3,$4,$5,$6)
+      RETURNING id;
+      `,
+      [
+        nombre_completo,
+        usuario,
+        correo || null,
+        password,
+        id_dgeneral || null,
+        !!activo,
+      ]
+    );
+
+    const newId = ins.rows[0].id;
+
+    // Borrar roles previos por si acaso (no debería haber, pero por seguridad)
+    await client.query("DELETE FROM usuario_rol WHERE id_usuario = $1", [
+      newId,
+    ]);
+
+    // Insertar roles si vienen
+    if (Array.isArray(roles) && roles.length > 0) {
+      for (const rClave of roles) {
+        const r = String(rClave || "").trim().toUpperCase();
+        if (!r) continue;
+
+        // Buscar ID de rol por clave
+        const rolRow = await client.query(
+          "SELECT id FROM roles WHERE UPPER(clave) = $1 LIMIT 1",
+          [r]
+        );
+
+        if (rolRow.rowCount > 0) {
+          const idRol = rolRow.rows[0].id;
+          await client.query(
+            `
+            INSERT INTO usuario_rol (id_usuario, id_rol)
+            VALUES ($1,$2)
+            ON CONFLICT DO NOTHING;
+            `,
+            [newId, idRol]
+          );
+        }
+      }
+    }
+
+    await client.query("COMMIT");
+
+    res.json({ ok: true, id: newId });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error("POST /api/admin/usuarios ERROR:", e);
+
+    // Violación de UNIQUE (usuario o correo)
+    if (e.code === "23505") {
+      return res
+        .status(400)
+        .json({ error: "Usuario o correo ya existen en el sistema" });
+    }
+
+    res.status(500).json({ error: "Error creando usuario" });
+  } finally {
+    client.release();
+  }
+});
+
+// ACTUALIZAR usuario
+app.put("/api/admin/usuarios/:id", async (req, res) => {
+  const id = Number(req.params.id || 0);
+  if (!id) return res.status(400).json({ error: "ID inválido" });
+
+  const {
+    nombre_completo,
+    usuario,
+    correo,
+    password,
+    id_dgeneral,
+    activo = true,
+    roles = [],
+  } = req.body;
+
+  if (!nombre_completo || !usuario) {
+    return res
+      .status(400)
+      .json({ error: "Nombre completo y usuario son obligatorios" });
+  }
+
+  const client = await getClient();
+  try {
+    await client.query("BEGIN");
+
+    // Si viene password, la actualizamos, si no, la dejamos igual
+    if (password && password.trim().length > 0) {
+      await client.query(
+        `
+        UPDATE usuarios
+           SET nombre_completo = $1,
+               usuario         = $2,
+               correo          = $3,
+               password        = $4,
+               id_dgeneral     = $5,
+               activo          = $6
+         WHERE id = $7;
+        `,
+        [
+          nombre_completo,
+          usuario,
+          correo || null,
+          password,
+          id_dgeneral || null,
+          !!activo,
+          id,
+        ]
+      );
+    } else {
+      await client.query(
+        `
+        UPDATE usuarios
+           SET nombre_completo = $1,
+               usuario         = $2,
+               correo          = $3,
+               id_dgeneral     = $4,
+               activo          = $5
+         WHERE id = $6;
+        `,
+        [
+          nombre_completo,
+          usuario,
+          correo || null,
+          id_dgeneral || null,
+          !!activo,
+          id,
+        ]
+      );
+    }
+
+    // Actualizar roles
+    await client.query("DELETE FROM usuario_rol WHERE id_usuario = $1", [id]);
+
+    if (Array.isArray(roles) && roles.length > 0) {
+      for (const rClave of roles) {
+        const r = String(rClave || "").trim().toUpperCase();
+        if (!r) continue;
+
+        const rolRow = await client.query(
+          "SELECT id FROM roles WHERE UPPER(clave) = $1 LIMIT 1",
+          [r]
+        );
+        if (rolRow.rowCount > 0) {
+          const idRol = rolRow.rows[0].id;
+          await client.query(
+            `
+            INSERT INTO usuario_rol (id_usuario, id_rol)
+            VALUES ($1,$2)
+            ON CONFLICT DO NOTHING;
+            `,
+            [id, idRol]
+          );
+        }
+      }
+    }
+
+    await client.query("COMMIT");
+    res.json({ ok: true });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error("PUT /api/admin/usuarios/:id ERROR:", e);
+
+    if (e.code === "23505") {
+      return res
+        .status(400)
+        .json({ error: "Usuario o correo ya existen en el sistema" });
+    }
+
+    res.status(500).json({ error: "Error actualizando usuario" });
+  } finally {
+    client.release();
+  }
+});
+
+// ELIMINAR usuario
+app.delete("/api/admin/usuarios/:id", async (req, res) => {
+  const id = Number(req.params.id || 0);
+  if (!id) return res.status(400).json({ error: "ID inválido" });
+
+  const client = await getClient();
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM usuario_rol WHERE id_usuario = $1", [id]);
+    await client.query("DELETE FROM usuarios WHERE id = $1", [id]);
+    await client.query("COMMIT");
+    res.json({ ok: true });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error("DELETE /api/admin/usuarios/:id ERROR:", e);
+    res.status(500).json({ error: "Error eliminando usuario" });
+  } finally {
+    client.release();
+  }
+});
+
+
+
+
 /* ======================== Arranque ============================= */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("API escuchando en http://localhost:" + PORT);
+});
+
+
+/* =====================================================
+   ADMIN: LISTA DE USUARIOS
+   ===================================================== */
+
+app.get("/api/admin/usuarios", async (_req, res) => {
+  try {
+    const sql = `
+      SELECT
+        u.id,
+        u.nombre_completo,
+        u.usuario,
+        u.correo,
+        u.activo,
+        u.fecha_creacion,
+        u.id_dgeneral,
+        d.clave       AS dgeneral_clave,
+        d.dependencia AS dgeneral_nombre,
+        COALESCE(
+          ARRAY_AGG(r.clave ORDER BY r.clave)
+          FILTER (WHERE r.clave IS NOT NULL),
+          '{}'::varchar[]
+        ) AS roles
+      FROM usuarios u
+      LEFT JOIN dgeneral d      ON d.id = u.id_dgeneral
+      LEFT JOIN usuario_rol ur  ON ur.id_usuario = u.id
+      LEFT JOIN roles r         ON r.id = ur.id_rol
+      GROUP BY
+        u.id,
+        d.clave,
+        d.dependencia
+      ORDER BY u.id;
+    `;
+
+    const result = await query(sql);
+    res.json(result.rows);
+  } catch (err) {
+    console.error("GET /api/admin/usuarios error:", err);
+    res.status(500).json({ error: "Error obteniendo usuarios" });
+  }
 });

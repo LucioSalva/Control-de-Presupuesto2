@@ -4,7 +4,7 @@ const money = (v) => {
   return v.toLocaleString('es-MX', { style:'currency', currency:'MXN', maximumFractionDigits:2 });
 };
 const MES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-const LS_KEY = 'cp_app_data_v1';
+const ;
 
 const STATE = {
   presupuesto: [], // [{partida, presupuesto}]

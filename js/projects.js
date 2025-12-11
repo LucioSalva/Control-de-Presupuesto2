@@ -2,6 +2,7 @@
 
 const API_BASE = "http://localhost:3000";
 
+// ================== FORMATO DE DINERO ==================
 const money = (v) => {
   if (v === undefined || v === null || isNaN(v)) return "—";
   return Number(v).toLocaleString("es-MX", {
@@ -11,6 +12,7 @@ const money = (v) => {
   });
 };
 
+// ================== BANNER (SweetAlert2) ==================
 function banner(msg, type = "info") {
   const iconMap = {
     info: "info",
@@ -39,17 +41,63 @@ function banner(msg, type = "info") {
   });
 }
 
+// ================== LLAMADAS A LA API ==================
 async function apiGet(path) {
   const r = await fetch(API_BASE + path);
   if (!r.ok) throw new Error("GET " + path + " " + r.status);
   return r.json();
 }
 
+// ================== ESTADO GLOBAL ==================
 const STATE = {
   projects: [],
   filtered: [],
 };
 
+// ================== USUARIO ACTUAL / ROLES ==================
+let CURRENT_USER = null;
+let CURRENT_ROLES_NORM = [];
+let CURRENT_ID_DGENERAL = null;
+
+/**
+ * Carga el usuario desde localStorage.
+ * Si no hay sesión, redirige a login.
+ */
+function loadCurrentUser() {
+  try {
+    const raw = localStorage.getItem("cp_usuario");
+    if (!raw) {
+      console.warn(
+        "[PROJECTS] No hay cp_usuario en localStorage, redirigiendo a login"
+      );
+      window.location.href = "login.html";
+      return;
+    }
+
+    const user = JSON.parse(raw);
+    CURRENT_USER = user;
+
+    const roles = Array.isArray(user.roles) ? user.roles : [];
+    CURRENT_ROLES_NORM = roles
+      .filter((r) => r != null)
+      .map((r) => String(r).trim().toUpperCase());
+
+    CURRENT_ID_DGENERAL = user.id_dgeneral != null ? Number(user.id_dgeneral) : null;
+
+    console.log("[PROJECTS] Usuario:", CURRENT_USER);
+    console.log("[PROJECTS] Roles:", CURRENT_ROLES_NORM);
+    console.log("[PROJECTS] id_dgeneral (usuario):", CURRENT_ID_DGENERAL);
+  } catch (e) {
+    console.error("[PROJECTS] Error leyendo cp_usuario:", e);
+    window.location.href = "login.html";
+  }
+}
+
+function isAreaUser() {
+  return CURRENT_ROLES_NORM.includes("AREA");
+}
+
+// ================== RENDER KPIs ==================
 function renderKPIs() {
   const totalProjects = STATE.filtered.length;
   const totalPresupuesto = STATE.filtered.reduce(
@@ -72,6 +120,7 @@ function renderKPIs() {
   document.getElementById("kpi-saldo").textContent = money(totalSaldo);
 }
 
+// ================== RENDER TABLA ==================
 function renderTable() {
   const tbody = document.getElementById("tbody-projects");
   tbody.innerHTML = "";
@@ -138,6 +187,7 @@ function renderTable() {
   });
 }
 
+// ================== FILTRO POR BUSCADOR ==================
 function applyFilter() {
   const term = (document.getElementById("search-project").value || "")
     .trim()
@@ -154,10 +204,29 @@ function applyFilter() {
   renderTable();
 }
 
+// ================== CARGAR PROYECTOS DESDE LA API ==================
 async function loadProjects() {
   try {
     const data = await apiGet("/api/projects");
-    STATE.projects = Array.isArray(data) ? data : [];
+    let projects = Array.isArray(data) ? data : [];
+
+    // 🔒 FILTRO PARA USUARIOS AREA: solo ven proyectos de su propio id_dgeneral
+    if (isAreaUser() && CURRENT_ID_DGENERAL != null) {
+      const myIdDg = Number(CURRENT_ID_DGENERAL);
+      projects = projects.filter((p) => {
+        const projIdDg =
+          p.id_dgeneral != null ? Number(p.id_dgeneral) : null;
+        return projIdDg === myIdDg;
+      });
+      console.log(
+        "[PROJECTS] Filtro AREA por id_dgeneral. Usuario:",
+        myIdDg,
+        " → proyectos:",
+        projects.length
+      );
+    }
+
+    STATE.projects = projects;
     STATE.filtered = [...STATE.projects];
     renderTable();
   } catch (e) {
@@ -169,7 +238,12 @@ async function loadProjects() {
   }
 }
 
+// ================== INICIO ==================
 window.addEventListener("DOMContentLoaded", async () => {
+  // Primero cargamos al usuario actual y sus roles
+  loadCurrentUser();
+
+  // Luego cargamos los proyectos (con el filtro por rol AREA si aplica)
   await loadProjects();
 
   const input = document.getElementById("search-project");

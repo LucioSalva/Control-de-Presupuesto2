@@ -28,13 +28,30 @@ const MES = [
 ];
 
 const LS_KEY = "cp_app_data_v1";
+
+function getCurrentUserRoleFlags() {
+  try {
+    const raw = localStorage.getItem("cp_usuario");
+    if (!raw) return { esAdmin: false };
+    const user = JSON.parse(raw);
+    const roles = Array.isArray(user.roles) ? user.roles : [];
+    const rolesNorm = roles.map((r) => String(r).trim().toUpperCase());
+    return {
+      esAdmin: rolesNorm.includes("ADMIN"),
+    };
+  } catch (e) {
+    console.warn("No se pudo leer cp_usuario", e);
+    return { esAdmin: false };
+  }
+}
+
+const { esAdmin } = getCurrentUserRoleFlags();
+
 const PROJECT_KEYS_KEY = "cp_current_project_keys";
 const API_URL = "http://localhost:3000";
 
 function normalizeKey(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase();
+  return String(value || "").trim().toLowerCase();
 }
 
 const STATE = {
@@ -48,6 +65,43 @@ const STATE = {
   missingRows: [],
   projectKeys: null,
 };
+
+// ================== USUARIO ACTUAL (desde localStorage) ==================
+let CURRENT_USER = null;
+let CURRENT_ROLES = [];
+let CURRENT_ROLES_NORM = [];
+let CURRENT_DG_CLAVE = ""; // ejemplo: "L00" de dgeneral
+
+function loadCurrentUserFromLS() {
+  try {
+    const raw = localStorage.getItem("cp_usuario");
+    if (!raw) return;
+
+    const user = JSON.parse(raw);
+    CURRENT_USER = user || null;
+
+    const roles = Array.isArray(user.roles) ? user.roles : [];
+    CURRENT_ROLES = roles;
+    CURRENT_ROLES_NORM = roles
+      .filter((r) => r != null)
+      .map((r) => String(r).trim().toUpperCase());
+
+    CURRENT_DG_CLAVE = String(user.dgeneral_clave || "").trim().toUpperCase();
+
+    console.log("[USER] ", CURRENT_USER);
+    console.log("[USER] roles:", CURRENT_ROLES_NORM);
+    console.log("[USER] dgeneral_clave:", CURRENT_DG_CLAVE);
+  } catch (e) {
+    console.warn("[USER] No se pudo leer cp_usuario:", e);
+  }
+}
+
+function isAreaUser() {
+  return CURRENT_ROLES_NORM.includes("AREA");
+}
+
+// 👉 cargar usuario inmediatamente para que todo lo demás lo use
+loadCurrentUserFromLS();
 
 // Escapar HTML
 function escapeHtml(s) {
@@ -186,12 +240,20 @@ async function loadProjectCatalogs() {
   if (projectCatalogsLoaded) return;
 
   try {
-    const [dg, da, fu, prj] = await Promise.all([
+    const [dgRaw, da, fu, prj] = await Promise.all([
       apiGet("/api/catalogos/dgeneral"),
       apiGet("/api/catalogos/dauxiliar"),
       apiGet("/api/catalogos/fuentes"),
       apiGet("/api/catalogos/proyectos"),
     ]);
+
+    let dg = Array.isArray(dgRaw) ? dgRaw : [];
+
+    // 🔒 Si es usuario AREA, limitar dgeneral solo a su dependencia
+    if (isAreaUser() && CURRENT_USER && CURRENT_USER.id_dgeneral) {
+      const idDG = Number(CURRENT_USER.id_dgeneral);
+      dg = dg.filter((row) => Number(row.id) === idDG);
+    }
 
     PROJECT_CATALOGS.dgeneral = dg;
     PROJECT_CATALOGS.dauxiliar = da;
@@ -210,6 +272,15 @@ async function loadProjectCatalogs() {
       prj,
       (r) => `${r.clave} — ${r.descripcion}`
     );
+
+    // Si es AREA, fijar y bloquear el combo de dgeneral
+    const selDg = document.getElementById("c-dgeneral");
+    if (selDg && isAreaUser() && CURRENT_USER && CURRENT_USER.id_dgeneral) {
+      selDg.value = String(CURRENT_USER.id_dgeneral);
+      selDg.disabled = true;
+    } else if (selDg) {
+      selDg.disabled = false;
+    }
 
     projectCatalogsLoaded = true;
   } catch (err) {
@@ -255,10 +326,8 @@ function updateProjectSummaryBox() {
     );
 
   // 🧠 Construimos el ID de proyecto automáticamente
-  // Ajusta el formato si quieres (agregar guiones, etc.)
   let idProyectoAuto = "";
   if (dg && da && fu && prj) {
-    // ejemplo: L00 + 100 + 170301 + 010301010101
     idProyectoAuto = `${dg.clave}${da.clave}${fu.clave}${prj.clave}`;
   }
 
@@ -528,9 +597,9 @@ function renderMissing(rows) {
   tbody.innerHTML = "";
   rows.forEach((r) => {
     const d = r.fecha
-      ? `${String(r.fecha.getUTCDate()).padStart(2, "0")}/${
-          MES[r.fecha.getUTCMonth()]
-        }/${r.fecha.getUTCFullYear()}`
+      ? `${String(r.fecha.getUTCDate()).padStart(2, "0")}/${MES[
+          r.fecha.getUTCMonth()
+        ]}/${r.fecha.getUTCFullYear()}`
       : "—";
     const tr = document.createElement("tr");
     tr.dataset.partida = r.partida;
@@ -624,9 +693,9 @@ function renderMovimientos() {
     const tipo = m._incompleta ? "Reconducción (incompleta)" : m.tipo;
 
     const fechaStr = m.fecha
-      ? `${String(m.fecha.getUTCDate()).padStart(2, "0")}/${
-          MES[m.fecha.getUTCMonth()]
-        }/${m.fecha.getUTCFullYear()}`
+      ? `${String(m.fecha.getUTCDate()).padStart(2, "0")}/${MES[
+          m.fecha.getUTCMonth()
+        ]}/${m.fecha.getUTCFullYear()}`
       : "—";
 
     tr.innerHTML = `
@@ -910,7 +979,7 @@ document
     if (!clave || isNaN(presupuesto) || !mes)
       return banner("Captura partida, presupuesto y mes válidos", "warning");
 
-        try {
+    try {
       const esDuplicado = await checkDuplicatePartida(
         clave,
         presupuesto,
@@ -947,9 +1016,7 @@ document
         STATE.projectKeys ||
         (() => {
           try {
-            return JSON.parse(
-              localStorage.getItem(PROJECT_KEYS_KEY) || "{}"
-            );
+            return JSON.parse(localStorage.getItem(PROJECT_KEYS_KEY) || "{}");
           } catch {
             return {};
           }
@@ -986,7 +1053,6 @@ document
     } catch (e) {
       banner(e.message, "danger");
     }
-
   });
 
 // Formulario: registrar gasto
@@ -1080,6 +1146,18 @@ if (navSearchForm) {
     if (!rawValue) {
       input?.focus();
       return;
+    }
+
+    // 🔒 Si es usuario AREA, solo puede buscar proyectos de su propia DG
+    if (isAreaUser() && CURRENT_DG_CLAVE) {
+      const codeUpper = rawValue.toUpperCase();
+      if (!codeUpper.startsWith(CURRENT_DG_CLAVE)) {
+        banner(
+          `Solo puedes consultar proyectos cuya clave inicie con <strong>${CURRENT_DG_CLAVE}</strong>.`,
+          "warning"
+        );
+        return;
+      }
     }
 
     localStorage.setItem("cp_current_project", rawValue);
@@ -1328,6 +1406,25 @@ document.getElementById("btn-mode-new")?.addEventListener("click", async () => {
 
   await loadProjectCatalogs();
   updateProjectSummaryBox();
+
+  // 🔒 Si es usuario AREA, dependerá de loadProjectCatalogs,
+  // pero reforzamos por si acaso
+  if (isAreaUser() && CURRENT_USER && CURRENT_USER.id_dgeneral) {
+    const selDg = document.getElementById("c-dgeneral");
+    if (selDg) {
+      selDg.value = String(CURRENT_USER.id_dgeneral);
+      selDg.disabled = true;
+    }
+
+    banner(
+      `Solo puedes crear proyectos para tu dependencia general <strong>${escapeHtml(
+        CURRENT_DG_CLAVE || ""
+      )}</strong>.`,
+      "info"
+    );
+
+    updateProjectSummaryBox();
+  }
 });
 
 // Cancelar creación y volver a modo normal
@@ -1375,9 +1472,14 @@ document
       banner("Captura un <strong>ID de proyecto</strong> válido.", "warning");
       return;
     }
-    if (!Number.isInteger(idDgeneral) || idDgeneral <= 0 ||
-        !Number.isInteger(idDauxiliar) || idDauxiliar <= 0 ||
-        !Number.isInteger(idFuente) || idFuente <= 0) {
+    if (
+      !Number.isInteger(idDgeneral) ||
+      idDgeneral <= 0 ||
+      !Number.isInteger(idDauxiliar) ||
+      idDauxiliar <= 0 ||
+      !Number.isInteger(idFuente) ||
+      idFuente <= 0
+    ) {
       banner("Selecciona Dependencia general, auxiliar y fuente.", "warning");
       return;
     }
@@ -1436,14 +1538,16 @@ document
 window.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
   const qProject = params.get("project");
-  const memProject = localStorage.getItem("cp_current_project");
   const input = document.getElementById("proj-code");
 
-  if (qProject) {
-    if (input) input.value = qProject;
+  // ✅ Nunca usar proyecto guardado en localStorage
+  // Solo usar el que venga en la URL (si es que viene)
+  if (qProject && input) {
+    input.value = qProject;
     localStorage.setItem("cp_current_project", qProject);
-  } else if (memProject && input && !input.value) {
-    input.value = memProject;
+  } else if (input) {
+    input.value = "";
+    localStorage.removeItem("cp_current_project");
   }
 
   const today = new Date().toISOString().split("T")[0];
@@ -1462,7 +1566,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   } catch {}
 
   try {
-    if ((input?.value || "").trim()) {
+    if (qProject && (input?.value || "").trim()) {
       await loadFromAPI();
       banner("Datos Cargados.", "info");
     } else {
@@ -1476,6 +1580,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       "danger"
     );
   }
+
   renderAll();
 });
 

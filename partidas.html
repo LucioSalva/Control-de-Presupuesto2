@@ -18,36 +18,44 @@
 <body>
   <!-- NAVBAR PRINCIPAL -->
   <nav class="navbar navbar-expand-lg shadow-sm">
-    <div class="container-fluid">
-      <a class="navbar-brand fw-semibold">
-        <i class="bi bi-currency-dollar me-2"></i>Control Presupuestal
-      </a>
+  <div class="container-fluid">
+    <a class="navbar-brand fw-semibold">
+      <i class="bi bi-currency-dollar me-2"></i>Control Presupuestal
+    </a>
 
-      <!-- Buscador de ID de proyecto (se comparte con index: mismo id) -->
-      <form id="nav-search" class="nav-search" autocomplete="off">
-        <button type="submit" class="nav-search__btn" aria-label="Buscar ID">
-          <i class="bi bi-search"></i>
-        </button>
-        <input id="proj-code" type="text" name="proj-code"
-               class="form-control form-control-sm nav-search__input"
-               aria-label="ID del proyecto" placeholder="ID Presupuesto">
-      </form>
+    <!-- Buscar proyecto/partida -->
+    <form id="nav-search" class="nav-search" autocomplete="off">
+      <button type="submit" class="nav-search__btn" aria-label="Buscar ID">
+        <i class="bi bi-search"></i>
+      </button>
+      <input id="proj-code" type="text" name="proj-code"
+             class="form-control form-control-sm nav-search__input"
+             aria-label="ID del proyecto" placeholder="ID Presupuesto">
+    </form>
 
-      <div class="logo-container">
-        <img src="/public/img/ayuntamiento-de-ecatepec.png"
-             alt="Ayuntamiento de Ecatepec" class="navbar-logo">
-      </div>
-
-      <div class="ms-auto d-flex gap-2 align-items-center">
-        <button id="btn-export-xlsx-top" class="btn btn-outline-success btn-sm">
-          <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
-        </button>
-        <button id="btn-reset" class="btn btn-outline-danger btn-sm">
-          <i class="bi bi-eraser me-1"></i>Reiniciar
-        </button>
-      </div>
+    <div class="logo-container">
+      <img src="/public/img/ayuntamiento-de-ecatepec.png"
+           alt="Ayuntamiento de Ecatepec" class="navbar-logo">
     </div>
-  </nav>
+
+
+    <div class="ms-auto d-flex gap-2 align-items-center">
+      <button id="btn-export-xlsx" class="btn btn-outline-success btn-sm">
+        <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+      </button>
+      <button id="btn-reset" class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-eraser me-1"></i>Reiniciar
+      </button>
+      <div class="d-flex align-items-center gap-3">
+      <span id="userInfo" class="text-white fw-bold"></span>
+
+      <button id="btnLogout" class="btn btn-sm btn-outline-light">
+        Cerrar sesión
+      </button>
+    </div>
+    </div>
+  </div>
+</nav>
 
   <!-- NAVBAR DE PESTAÑAS -->
   <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm" style="min-height: 40px;">
@@ -188,6 +196,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="js/partidas.js"></script>
+  <script src="js/user-info.js"></script>
 </body>
 
 </html>

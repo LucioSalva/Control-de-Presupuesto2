@@ -1,0 +1,66 @@
+/* Fondo general */
+body {
+  background-color: #f5f5f5;
+}
+
+/* Encabezado de página */
+.page-header {
+  margin-bottom: 1.5rem;
+}
+
+/* Tarjeta principal */
+.card {
+  border-radius: 0.5rem;
+}
+
+.card-body {
+  padding: 1.25rem 1.5rem;
+}
+
+/* Tabla de usuarios */
+#tablaUsuarios th {
+  white-space: nowrap;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+#tablaUsuarios td {
+  font-size: 0.85rem;
+}
+
+/* Columna de acciones */
+#tablaUsuarios td .btn {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* Alertas generales */
+#alertBox {
+  margin-bottom: 1rem;
+}
+
+/* Estado vacío */
+#emptyState {
+  font-size: 0.9rem;
+}
+
+/* Botones header */
+#btnVolver,
+#btnNuevoUsuario {
+  min-width: 140px;
+}
+
+/* Modal */
+.modal-header {
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.modal-title {
+  font-size: 1rem;
+}
+
+.form-text {
+  font-size: 0.75rem;
+}

@@ -1,280 +1,289 @@
 <!doctype html>
 <html lang="es">
+
 <head>
-  <meta charset="utf-8" />
-  <title>Suficiencia Presupuestal 2025</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="utf-8" />
+    <title>Suficiencia Presupuestal 2025</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Bootstrap para que se vea decente -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap para que se vea decente -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/suficiencia_presupuestal.css">
+    <link rel="stylesheet" href="css/nabvar.css">
 
-  <style>
-    body {
-      font-size: 12px;
-      background-color: #f5f5f5;
-    }
 
-    .form-container {
-      max-width: 1000px;
-      margin: 20px auto;
-      background: #ffffff;
-      padding: 20px 30px;
-      border-radius: 6px;
-      box-shadow: 0 0 6px rgba(0,0,0,.1);
-    }
-
-    .form-title {
-      text-align: center;
-      font-weight: bold;
-      text-transform: uppercase;
-      font-size: 14px;
-    }
-
-    .sub-title {
-      text-align: center;
-      font-size: 12px;
-    }
-
-    .table-bordered td,
-    .table-bordered th {
-      border: 1px solid #000 !important;
-    }
-
-    .table-header {
-      background-color: #e9ecef;
-      font-weight: bold;
-      text-align: center;
-    }
-
-    .firma {
-      text-align: center;
-      padding-top: 50px;
-      font-size: 11px;
-    }
-
-    .firma-linea {
-      border-top: 1px solid #000;
-      margin: 0 auto 3px auto;
-      width: 80%;
-    }
-
-    /* Para impresión en PDF */
-    @media print {
-      body {
-        background-color: #ffffff;
-      }
-
-      .no-print {
-        display: none !important;
-      }
-
-      .form-container {
-        box-shadow: none;
-        border-radius: 0;
-        margin: 0;
-        width: 100%;
-        max-width: 100%;
-        padding: 0;
-      }
-    }
-  </style>
 </head>
+
 <body>
+<!-- NAVBAR PRINCIPAL -->
+  <nav class="navbar navbar-expand-lg shadow-sm">
+    <div class="container-fluid">
+      <a class="navbar-brand fw-semibold">
+        <i class="bi bi-currency-dollar me-2 "></i>Control Presupuestal
+      </a>
 
-  <!-- Botones superiores -->
-  <div class="container mt-3 mb-2 no-print">
-    <div class="d-flex gap-2 justify-content-start">
-      <button class="btn btn-secondary btn-sm" type="button" onclick="toggleInstructivo()">
-        Ver instructivo
-      </button>
-      <button class="btn btn-primary btn-sm" type="button" onclick="generarPDF()">
-        Generar archivo PDF
-      </button>
-    </div>
-  </div>
+      <!-- Buscar proyecto/partida -->
+      <form id="nav-search" class="nav-search" autocomplete="off">
+        <button type="submit" class="nav-search__btn" aria-label="Buscar ID">
+          <i class="bi bi-search"></i>
+        </button>
+        <input id="proj-code" type="text" name="proj-code" class="form-control form-control-sm nav-search__input"
+          aria-label="ID del proyecto" placeholder="ID Presupuesto">
+      </form>
 
-  <!-- Contenedor principal del formulario (Hoja 1) -->
-  <div class="form-container">
-
-    <!-- Encabezado (ajusta nombres para que queden igual que en tu Excel) -->
-    <div class="row mb-3">
-      <div class="col-3 text-center">
-        <!-- Aquí podrías poner el logo -->
-        <span style="font-size:10px;">LOGO AYUNTAMIENTO</span>
+      <div class="logo-container">
+        <img src="/public/img/ayuntamiento-de-ecatepec.png" alt="Ayuntamiento de Ecatepec" class="navbar-logo">
       </div>
-      <div class="col-6">
-        <div class="form-title">
-          H. AYUNTAMIENTO DE ECATEPEC DE MORELOS
+
+
+      <div class="ms-auto d-flex gap-2 align-items-center">
+
+        
+
+        <div class="d-flex align-items-center gap-3">
+          <span id="userInfo" class="text-white fw-bold"></span>
+
+          <button id="btnLogout" class="btn btn-sm btn-outline-light bi bi-door-open">
+            Cerrar sesión
+          </button>
         </div>
-        <div class="sub-title">
-          SUFICIENCIA PRESUPUESTAL - EJERCICIO FISCAL 2025
+      </div>
+    </div>
+  </nav>
+
+  <!-- NAVBAR DE PESTAÑAS -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-light shadow-sm" style="min-height: 40px;">
+    <div class="container-fluid">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0" style="flex-direction: row;">
+        <li class="nav-item">
+          <a class="nav-link" href="index.html">
+            <i class="bi bi-house me-1"></i>Presupuesto
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="partidas.html">
+            <i class="bi bi-list-check me-1"></i>Partidas Detalladas
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="projects.html">
+            <i class="bi bi-diagram-3 me-1"></i>Proyectos
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="reporte-ejecucion.html">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Ejecución
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link active" href="suficiencia_presupuestal.html">
+            <i class="bi bi-pencil me-1"></i>Suficiencia Presupuestal
+          </a>
+        </li>
+      </ul>
+      <button id="btn-export-xlsx" class="btn btn-outline-success btn-sm">
+          <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+        </button>
+
+        <button id="btn-reset" class="btn btn-outline-danger btn-sm">
+          <i class="bi bi-eraser me-1"></i>Reiniciar
+        </button>
+    </div>
+  </nav>
+
+    <div class="container mt-5 mb-2 no-print">
+        <div class="d-flex gap-2 justify-content-start">
+            <button class="btn btn-secondary btn-sm" type="button" onclick="toggleInstructivo()">
+                Ver instructivo
+            </button>
+            <button class="btn btn-primary btn-sm" type="button" onclick="generarPDF()">
+                <i class="bi bi-file-earmark-pdf-fill me-1"></i>Generar archivo PDF
+            </button>
+            <a href="/public/PDF/INSTRUCTIVO_PARA_LLENAR_EL_FORMATO.pdf" target="_blank"
+                class="btn btn-secondary btn-sm ">
+                <i class="bi bi-file-earmark-pdf-fill me-1"></i>Abrir instructivo en PDF
+            </a>
         </div>
-      </div>
-      <div class="col-3">
-        <table class="table table-bordered mb-0">
-          <tr>
-            <th class="table-header">No. de Suficiencia</th>
-          </tr>
-          <tr>
-            <td><input type="text" class="form-control form-control-sm" name="no_suficiencia"></td>
-          </tr>
-        </table>
-      </div>
     </div>
 
-    <!-- Datos generales -->
-    <table class="table table-bordered mb-2">
-      <tr>
-        <th class="table-header" style="width: 15%;">Fecha</th>
-        <td style="width: 35%;">
-          <input type="date" class="form-control form-control-sm" name="fecha">
-        </td>
-        <th class="table-header" style="width: 15%;">Dependencia / Unidad Responsable</th>
-        <td style="width: 35%;">
-          <input type="text" class="form-control form-control-sm" name="dependencia">
-        </td>
-      </tr>
-      <tr>
-        <th class="table-header">Dirección / Departamento</th>
-        <td>
-          <input type="text" class="form-control form-control-sm" name="departamento">
-        </td>
-        <th class="table-header">Programa</th>
-        <td>
-          <input type="text" class="form-control form-control-sm" name="programa">
-        </td>
-      </tr>
-      <tr>
-        <th class="table-header">Proyecto</th>
-        <td>
-          <input type="text" class="form-control form-control-sm" name="proyecto">
-        </td>
-        <th class="table-header">Fuente de Financiamiento</th>
-        <td>
-          <input type="text" class="form-control form-control-sm" name="fuente">
-        </td>
-      </tr>
-      <tr>
-        <th class="table-header">Partida Presupuestal</th>
-        <td>
-          <input type="text" class="form-control form-control-sm" name="partida">
-        </td>
-        <th class="table-header">Importe Solicitado</th>
-        <td>
-          <input type="number" step="0.01" class="form-control form-control-sm text-end" name="importe_solicitado">
-        </td>
-      </tr>
-    </table>
-
-    <!-- Justificación -->
-    <div class="mb-2">
-      <label class="fw-bold" style="font-size: 11px;">Justificación:</label>
-      <textarea class="form-control form-control-sm" rows="3" name="justificacion"></textarea>
-    </div>
-
-    <!-- Detalle de bienes/servicios -->
-    <table class="table table-bordered mb-3">
-      <thead>
-        <tr>
-          <th class="table-header" style="width: 5%;">No.</th>
-          <th class="table-header" style="width: 15%;">Clave Presupuestal</th>
-          <th class="table-header" style="width: 40%;">Descripción del bien o servicio</th>
-          <th class="table-header" style="width: 10%;">Cantidad</th>
-          <th class="table-header" style="width: 15%;">Costo unitario</th>
-          <th class="table-header" style="width: 15%;">Importe</th>
-        </tr>
-      </thead>
-      <tbody>
-        <!-- Deja algunas filas fijas. Puedes copiar/pegar para tener más. -->
-        <tr>
-          <td><input type="number" class="form-control form-control-sm" name="r1_no"></td>
-          <td><input type="text" class="form-control form-control-sm" name="r1_clave"></td>
-          <td><input type="text" class="form-control form-control-sm" name="r1_descripcion"></td>
-          <td><input type="number" step="0.01" class="form-control form-control-sm text-end" name="r1_cantidad"></td>
-          <td><input type="number" step="0.01" class="form-control form-control-sm text-end" name="r1_costo"></td>
-          <td><input type="number" step="0.01" class="form-control form-control-sm text-end" name="r1_importe"></td>
-        </tr>
-        <tr>
-          <td><input type="number" class="form-control form-control-sm" name="r2_no"></td>
-          <td><input type="text" class="form-control form-control-sm" name="r2_clave"></td>
-          <td><input type="text" class="form-control form-control-sm" name="r2_descripcion"></td>
-          <td><input type="number" step="0.01" class="form-control form-control-sm text-end" name="r2_cantidad"></td>
-          <td><input type="number" step="0.01" class="form-control form-control-sm text-end" name="r2_costo"></td>
-          <td><input type="number" step="0.01" class="form-control form-control-sm text-end" name="r2_importe"></td>
-        </tr>
-        <tr>
-          <td><input type="number" class="form-control form-control-sm" name="r3_no"></td>
-          <td><input type="text" class="form-control form-control-sm" name="r3_clave"></td>
-          <td><input type="text" class="form-control form-control-sm" name="r3_descripcion"></td>
-          <td><input type="number" step="0.01" class="form-control form-control-sm text-end" name="r3_cantidad"></td>
-          <td><input type="number" step="0.01" class="form-control form-control-sm text-end" name="r3_costo"></td>
-          <td><input type="number" step="0.01" class="form-control form-control-sm text-end" name="r3_importe"></td>
-        </tr>
-        <!-- Agrega más filas si tu formato las tiene -->
-      </tbody>
-    </table>
-
-    <!-- Totales -->
-    <table class="table table-bordered mb-4">
-      <tr>
-        <th class="table-header" style="width: 85%;">Total</th>
-        <td style="width: 15%;">
-          <input type="number" step="0.01" class="form-control form-control-sm text-end" name="total_general">
-        </td>
-      </tr>
-    </table>
-
-    <!-- Firmas -->
-    <div class="row mt-4">
-      <div class="col-4 firma">
-        <div class="firma-linea"></div>
-        <div>Elaboró</div>
-      </div>
-      <div class="col-4 firma">
-        <div class="firma-linea"></div>
-        <div>Revisó</div>
-      </div>
-      <div class="col-4 firma">
-        <div class="firma-linea"></div>
-        <div>Autorizó</div>
-      </div>
-    </div>
-  </div>
-
-  <div id="instructivo" class="container mt-4 mb-4" style="display:none;">
     <div class="form-container">
-      <h6 class="text-center mb-3">INSTRUCTIVO PARA LLENAR EL FORMATO: <br/>
-SOLICITUD DE SUFICIENCIA PRESUPUESTAL</h6>
-      <!-- Aquí pega el texto de la segunda hoja de tu Excel -->
-      <p style="font-size: 11px; text-align: justify;">
-        <!-- EJEMPLO: reemplaza todo este texto por el instructivo real -->
-        1. Capture el número de suficiencia presupuestal que corresponda, de acuerdo al control interno de la
-        Subdirección de Control y Registro Presupuestal.<br>
-        2. Registre la fecha en que se elabora la suficiencia.<br>
-        3. Indique la dependencia, dirección o unidad responsable que solicita la suficiencia.<br>
-        4. Describa de manera clara el bien o servicio a adquirir, la clave presupuestal, cantidad e importes.<br>
-        5. Verifique los totales antes de enviar para firma de autorización.<br>
-        <!-- Fin ejemplo -->
-      </p>
+
+        <div class="row mb-3">
+            <div class="col-3 text-center">
+                <span style="font-size:10px;">LOGO AYUNTAMIENTO</span>
+            </div>
+            <div class="col-6">
+                <div class="form-title">
+                    H. AYUNTAMIENTO DE ECATEPEC DE MORELOS
+                </div>
+                <div class="sub-title">
+                    SUFICIENCIA PRESUPUESTAL - EJERCICIO FISCAL 2025
+                </div>
+            </div>
+            <div class="col-3">
+                <table class="table table-bordered mb-0">
+                    <tr>
+                        <th class="table-header">No. de Suficiencia</th>
+                    </tr>
+                    <tr>
+                        <td><input type="text" class="form-control form-control-sm" name="no_suficiencia"></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Datos generales -->
+        <table class="table table-bordered mb-2">
+            <tr>
+                <th class="table-header" style="width: 15%;">Fecha</th>
+                <td style="width: 35%;">
+                    <input type="date" class="form-control form-control-sm" name="fecha">
+                </td>
+                <th class="table-header" style="width: 15%;">Dependencia / Unidad Responsable</th>
+                <td style="width: 35%;">
+                    <input type="text" class="form-control form-control-sm" name="dependencia">
+                </td>
+            </tr>
+            <tr>
+                <th class="table-header">Dirección / Departamento</th>
+                <td>
+                    <input type="text" class="form-control form-control-sm" name="departamento">
+                </td>
+                <th class="table-header">Programa</th>
+                <td>
+                    <input type="text" class="form-control form-control-sm" name="programa">
+                </td>
+            </tr>
+            <tr>
+                <th class="table-header">Proyecto</th>
+                <td>
+                    <input type="text" class="form-control form-control-sm" name="proyecto">
+                </td>
+                <th class="table-header">Fuente de Financiamiento</th>
+                <td>
+                    <input type="text" class="form-control form-control-sm" name="fuente">
+                </td>
+            </tr>
+            <tr>
+                <th class="table-header">Partida Presupuestal</th>
+                <td>
+                    <input type="text" class="form-control form-control-sm" name="partida">
+                </td>
+                <th class="table-header">Importe Solicitado</th>
+                <td>
+                    <input type="number" step="0.01" class="form-control form-control-sm text-end"
+                        name="importe_solicitado">
+                </td>
+            </tr>
+        </table>
+
+        <!-- Justificación -->
+        <div class="mb-2">
+            <label class="fw-bold" style="font-size: 11px;">Justificación:</label>
+            <textarea class="form-control form-control-sm" rows="3" name="justificacion"></textarea>
+        </div>
+
+        <!-- Detalle de bienes/servicios -->
+        <table class="table table-bordered mb-3">
+            <thead>
+                <tr>
+                    <th class="table-header" style="width: 5%;">No.</th>
+                    <th class="table-header" style="width: 15%;">Clave Presupuestal</th>
+                    <th class="table-header" style="width: 40%;">Descripción del bien o servicio</th>
+                    <th class="table-header" style="width: 10%;">Cantidad</th>
+                    <th class="table-header" style="width: 15%;">Costo unitario</th>
+                    <th class="table-header" style="width: 15%;">Importe</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Deja algunas filas fijas. Puedes copiar/pegar para tener más. -->
+                <tr>
+                    <td><input type="number" class="form-control form-control-sm" name="r1_no"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="r1_clave"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="r1_descripcion"></td>
+                    <td><input type="number" step="0.01" class="form-control form-control-sm text-end"
+                            name="r1_cantidad"></td>
+                    <td><input type="number" step="0.01" class="form-control form-control-sm text-end" name="r1_costo">
+                    </td>
+                    <td><input type="number" step="0.01" class="form-control form-control-sm text-end"
+                            name="r1_importe"></td>
+                </tr>
+                <tr>
+                    <td><input type="number" class="form-control form-control-sm" name="r2_no"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="r2_clave"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="r2_descripcion"></td>
+                    <td><input type="number" step="0.01" class="form-control form-control-sm text-end"
+                            name="r2_cantidad"></td>
+                    <td><input type="number" step="0.01" class="form-control form-control-sm text-end" name="r2_costo">
+                    </td>
+                    <td><input type="number" step="0.01" class="form-control form-control-sm text-end"
+                            name="r2_importe"></td>
+                </tr>
+                <tr>
+                    <td><input type="number" class="form-control form-control-sm" name="r3_no"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="r3_clave"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="r3_descripcion"></td>
+                    <td><input type="number" step="0.01" class="form-control form-control-sm text-end"
+                            name="r3_cantidad"></td>
+                    <td><input type="number" step="0.01" class="form-control form-control-sm text-end" name="r3_costo">
+                    </td>
+                    <td><input type="number" step="0.01" class="form-control form-control-sm text-end"
+                            name="r3_importe"></td>
+                </tr>
+                <!-- Agrega más filas si tu formato las tiene -->
+            </tbody>
+        </table>
+
+        <!-- Totales -->
+        <table class="table table-bordered mb-4">
+            <tr>
+                <th class="table-header" style="width: 85%;">Total</th>
+                <td style="width: 15%;">
+                    <input type="number" step="0.01" class="form-control form-control-sm text-end" name="total_general">
+                </td>
+            </tr>
+        </table>
+
+        <!-- Firmas -->
+        <div class="row mt-4">
+            <div class="col-4 firma">
+                <div class="firma-linea"></div>
+                <div>Elaboró</div>
+            </div>
+            <div class="col-4 firma">
+                <div class="firma-linea"></div>
+                <div>Revisó</div>
+            </div>
+            <div class="col-4 firma">
+                <div class="firma-linea"></div>
+                <div>Autorizó</div>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <script>
-    function toggleInstructivo() {
-      const instructivo = document.getElementById('instructivo');
-      if (instructivo.style.display === 'none' || instructivo.style.display === '') {
-        instructivo.style.display = 'block';
-        instructivo.scrollIntoView({ behavior: 'smooth' });
-      } else {
-        instructivo.style.display = 'none';
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    }
+    <div id="instructivo" class="container mt-4 mb-4" style="display:none;">
+        <div class="form-container">
+            <h6 class="text-center mb-3">INSTRUCTIVO PARA LLENAR EL FORMATO: <br />
+                SOLICITUD DE SUFICIENCIA PRESUPUESTAL</h6>
+            <!-- Aquí pega el texto de la segunda hoja de tu Excel -->
+            <p style="font-size: 11px; text-align: justify;">
+                <strong>Objetivo</strong><br />
+                Mediante el presente formato de Solicitud de Suficiencia Presupuestal, se verifica la disponibilidad de
+                recursos financieros en la partida presupuestal correspondiente, con el fin de determinar la viabilidad
+                de afectación del presupuesto para atender un requerimiento específico, conforme al techo presupuestal
+                autorizado y a la normatividad vigente.<br /><br />
 
-    function generarPDF() {
-      // Usamos la impresión del navegador; ahí eliges "Guardar como PDF"
-      window.print();
-    }
-  </script>
+                <strong>Distribución y Destinatario</strong><br />
+                El formato de Solicitud de Suficiencia Presupuestal es elaborado por el Área Solicitante y entregado a
+                la Subdirección de Control y Registro Presupuestal para su análisis y validación.
+
+                <!-- Fin ejemplo -->
+            </p>
+        </div>
+    </div>
+
+    <script src="js/suficiencia_presupuestal.js"></script>
 </body>
+
 </html>

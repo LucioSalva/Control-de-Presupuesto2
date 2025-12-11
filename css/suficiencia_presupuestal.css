@@ -1,0 +1,255 @@
+/* =========================
+   BASE
+   ========================= */
+body {
+  font-size: 12px;
+  background-color: #f5f5f5;
+}
+
+/* =========================
+   NAVBAR PRINCIPAL (vino)
+   ========================= */
+.navbar {
+  background: #691c32;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  min-height: 50px;
+  z-index: 1030;
+  width: 100%;
+}
+
+/* NAVBAR de pestañas (claro bajo el navbar vino) */
+.navbar-light {
+  position: fixed;
+  top: 50px;
+  left: 0;
+  right: 0;
+  min-height: 40px;
+  z-index: 1029;
+  background: #f8f9fa !important;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.navbar-light .nav-link {
+  color: #495057 !important;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  margin: 0 0.25rem;
+}
+
+.navbar-light .nav-link.active {
+  background-color: #691c32;
+  color: #ffffff !important;
+}
+
+.navbar-light .nav-link:hover {
+  background-color: #e9ecef;
+  color: #691c32 !important;
+}
+
+.navbar-light .nav-link.active:hover {
+  background-color: #5a1629;
+  color: #ffffff !important;
+}
+
+/* Logo central en navbar */
+.navbar-logo {
+  height: 40px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.logo-container {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+}
+
+.navbar .container-fluid {
+  position: relative;
+  min-height: 50px;
+}
+
+/* =========================
+   BUSCADOR EN NAVBAR
+   ========================= */
+.nav-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 44px;
+  padding: 0.25rem 0.4rem;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  transition: width 0.35s ease, background 0.35s ease;
+}
+
+.nav-search:hover,
+.nav-search:focus-within {
+  width: 240px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.nav-search__btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #ffffff;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  transition: left 0.35s ease, transform 0.35s ease;
+}
+
+.nav-search:hover .nav-search__btn,
+.nav-search:focus-within .nav-search__btn {
+  left: 0.6rem;
+  transform: translate(0, -50%);
+}
+
+.nav-search__input {
+  border: none;
+  box-shadow: none !important;
+  background: transparent !important;
+  color: #ffffff !important;
+  padding: 0;
+  width: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: width 0.35s ease, padding 0.35s ease, opacity 0.2s ease;
+  caret-color: #ffffff;
+}
+
+.nav-search:hover .nav-search__input,
+.nav-search:focus-within .nav-search__input {
+  width: 180px;
+  padding: 0 0.5rem 0 2.2rem;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.nav-search__input::placeholder {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* =========================
+   FORMULARIO (SUFICIENCIA)
+   ========================= */
+.form-container {
+  max-width: 1000px;
+  margin: 20px auto;
+  background: #ffffff;
+  padding: 20px 30px;
+  border-radius: 6px;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.1);
+}
+
+.form-title {
+  text-align: center;
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 14px;
+}
+
+.sub-title {
+  text-align: center;
+  font-size: 12px;
+}
+
+.table-bordered td,
+.table-bordered th {
+  border: 1px solid #000 !important;
+}
+
+.table-header {
+  background-color: #e9ecef;
+  font-weight: bold;
+  text-align: center;
+}
+
+.firma {
+  text-align: center;
+  padding-top: 50px;
+  font-size: 11px;
+}
+
+.firma-linea {
+  border-top: 1px solid #000;
+  margin: 0 auto 3px auto;
+  width: 80%;
+}
+
+/* =========================
+   IMPRESIÓN (PDF)
+   ========================= */
+@media print {
+  body {
+    background-color: #ffffff;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .form-container {
+    box-shadow: none;
+    border-radius: 0;
+    margin: 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 0;
+  }
+}
+
+/* =========================
+   RESPONSIVE NAVBAR
+   ========================= */
+@media (max-width: 992px) {
+  body {
+    padding-top: 140px;
+  }
+
+  .logo-container {
+    position: static;
+    transform: none;
+    text-align: center;
+    margin: 5px 0;
+    order: 3;
+    width: 100%;
+  }
+
+  .navbar .container-fluid {
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  .navbar-brand {
+    order: 1;
+  }
+
+  .nav-search {
+    order: 2;
+    margin: 5px 0;
+  }
+
+  .ms-auto {
+    order: 4;
+    margin-left: 0 !important;
+    margin-top: 5px;
+  }
+
+  .navbar-light {
+    top: 100px;
+  }
+}

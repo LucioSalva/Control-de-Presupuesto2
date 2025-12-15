@@ -3,6 +3,7 @@
 // =====================================================
 const ADMIN_API_BASE = "http://localhost:3000";
 const ENDPOINT_USUARIOS = `${ADMIN_API_BASE}/api/admin/usuarios`;
+const ENDPOINT_DGENERAL = `${ADMIN_API_BASE}/api/catalogos/dgeneral`;
 
 // Solo estos roles existen en la tabla roles (GOD, ADMIN, AREA)
 const ROLES_VALIDOS = ["GOD", "ADMIN", "AREA"];
@@ -33,7 +34,6 @@ const ROLES_VALIDOS = ["GOD", "ADMIN", "AREA"];
       username === "ing. lucio" ||
       username === "ing. lucio salvador";
 
-    // 👇 aquí usamos GOD (la clave de tu tabla)
     const esDios = rolesNorm.includes("GOD");
 
     if (!(esLucio || esDios)) {
@@ -53,6 +53,9 @@ const ROLES_VALIDOS = ["GOD", "ADMIN", "AREA"];
 // =====================================================
 let usuariosCache = [];
 let usuarioModalInstance = null;
+
+let dgeneralCatalog = []; // catálogo dgeneral para el select
+let editingMode = false;  // true cuando editas, false cuando creas
 
 // =====================================================
 //  UTILIDADES UI
@@ -85,6 +88,42 @@ function formatFecha(fechaStr) {
 }
 
 // =====================================================
+//  CATALOGO DGENERAL (SELECT)
+// =====================================================
+async function fetchDgeneralCatalog() {
+  const res = await fetch(ENDPOINT_DGENERAL, {
+    headers: { "Content-Type": "application/json" },
+  });
+
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const msg = (data && data.error) || "Error cargando catálogo dgeneral";
+    throw new Error(msg);
+  }
+
+  if (!Array.isArray(data)) {
+    throw new Error("Catálogo dgeneral inválido");
+  }
+
+  dgeneralCatalog = data;
+}
+
+function fillDgeneralSelect() {
+  const sel = document.getElementById("idDgeneral");
+  if (!sel) return;
+
+  sel.innerHTML = `<option value="">Seleccione...</option>`;
+
+  dgeneralCatalog.forEach((r) => {
+    const opt = document.createElement("option");
+    opt.value = String(r.id);
+    opt.textContent = `${r.clave} — ${r.dependencia}`;
+    sel.appendChild(opt);
+  });
+}
+
+// =====================================================
 //  API
 // =====================================================
 async function fetchUsuarios() {
@@ -92,9 +131,7 @@ async function fetchUsuarios() {
     hideAlert();
 
     const res = await fetch(ENDPOINT_USUARIOS, {
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
     });
 
     const data = await res.json().catch(() => null);
@@ -204,25 +241,43 @@ function renderTablaUsuarios() {
         </button>
       </td>
     `;
-
     tbody.appendChild(tr);
   });
 
-  if (resumen) {
-    resumen.textContent = `Total de usuarios: ${usuariosCache.length}`;
-  }
+  if (resumen) resumen.textContent = `Total de usuarios: ${usuariosCache.length}`;
 }
 
 // =====================================================
 //  MODAL: abrir / llenar / leer datos
 // =====================================================
+function setPasswordMode(isEdit) {
+  const passInput = document.getElementById("password");
+  if (!passInput) return;
+
+  if (isEdit) {
+    // Editar: NO obligatoria, NO se precarga
+    passInput.required = false;
+    passInput.value = "";
+    passInput.placeholder = "Dejar en blanco para no cambiar";
+  } else {
+    // Nuevo: obligatoria
+    passInput.required = true;
+    passInput.value = "";
+    passInput.placeholder = "";
+  }
+}
+
 function abrirModalNuevoUsuario() {
+  editingMode = false;
   limpiarFormularioUsuario();
+
   const titulo = document.getElementById("usuarioModalLabel");
   if (titulo) titulo.textContent = "Nuevo usuario";
 
   const idInput = document.getElementById("usuarioId");
   if (idInput) idInput.value = "";
+
+  setPasswordMode(false);
 
   if (!usuarioModalInstance) {
     const modalEl = document.getElementById("usuarioModal");
@@ -232,18 +287,20 @@ function abrirModalNuevoUsuario() {
 }
 
 function abrirModalEditarUsuario(usuario) {
+  editingMode = true;
   limpiarFormularioUsuario();
+
   const titulo = document.getElementById("usuarioModalLabel");
   if (titulo) titulo.textContent = `Editar usuario #${usuario.id}`;
 
   document.getElementById("usuarioId").value = usuario.id;
-  document.getElementById("nombreCompleto").value =
-    usuario.nombre_completo || "";
+  document.getElementById("nombreCompleto").value = usuario.nombre_completo || "";
   document.getElementById("usuarioInput").value = usuario.usuario || "";
   document.getElementById("correo").value = usuario.correo || "";
-  document.getElementById("idDgeneral").value = usuario.id_dgeneral || "";
+  document.getElementById("idDgeneral").value = usuario.id_dgeneral ? String(usuario.id_dgeneral) : "";
   document.getElementById("activo").checked = !!usuario.activo;
-  document.getElementById("password").value = usuario.password || ""; 
+
+  setPasswordMode(true);
 
   const roles = Array.isArray(usuario.roles) ? usuario.roles : [];
   const rolesNorm = roles.map((r) => String(r).trim().toUpperCase());
@@ -263,6 +320,11 @@ function abrirModalEditarUsuario(usuario) {
 function limpiarFormularioUsuario() {
   document.getElementById("usuarioForm").reset();
   document.getElementById("usuarioId").value = "";
+
+  // (select dgeneral): lo dejamos en vacío por default
+  const dg = document.getElementById("idDgeneral");
+  if (dg) dg.value = "";
+
   document.querySelectorAll(".rol-check").forEach((chk) => {
     chk.checked = false;
   });
@@ -273,14 +335,15 @@ function obtenerPayloadFormulario() {
   const idStr = document.getElementById("usuarioId").value.trim();
   const id = idStr ? Number(idStr) : null;
 
-  const nombre_completo = document
-    .getElementById("nombreCompleto")
-    .value.trim();
+  const nombre_completo = document.getElementById("nombreCompleto").value.trim();
   const usuario = document.getElementById("usuarioInput").value.trim();
   const correo = document.getElementById("correo").value.trim();
+
   const password = document.getElementById("password").value;
+
   const idDgeneralStr = document.getElementById("idDgeneral").value.trim();
   const id_dgeneral = idDgeneralStr ? Number(idDgeneralStr) : null;
+
   const activo = document.getElementById("activo").checked;
 
   // Roles desde los checkboxes
@@ -298,6 +361,11 @@ function obtenerPayloadFormulario() {
     throw new Error("Nombre completo y usuario son obligatorios");
   }
 
+  // Nuevo usuario: password obligatoria
+  if (id == null && (!password || !password.trim())) {
+    throw new Error("La contraseña es obligatoria al crear un usuario");
+  }
+
   const payload = {
     nombre_completo,
     usuario,
@@ -307,7 +375,8 @@ function obtenerPayloadFormulario() {
     roles,
   };
 
-  // Si hay contraseña capturada, la mandamos (para crear o cambiar)
+  // Editar: solo mandamos password si escribieron algo
+  // Nuevo: ya validamos que venga
   if (password && password.trim().length > 0) {
     payload.password = password;
   }
@@ -318,7 +387,7 @@ function obtenerPayloadFormulario() {
 // =====================================================
 //  INIT
 // =====================================================
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   // Botón volver
   const btnVolver = document.getElementById("btnVolver");
   if (btnVolver) {
@@ -333,6 +402,15 @@ document.addEventListener("DOMContentLoaded", () => {
     btnNuevoUsuario.addEventListener("click", () => {
       abrirModalNuevoUsuario();
     });
+  }
+
+  // Cargar catálogo dgeneral y llenar select
+  try {
+    await fetchDgeneralCatalog();
+    fillDgeneralSelect();
+  } catch (e) {
+    console.error("[DGENERAL] Error:", e);
+    showAlert("No se pudo cargar el catálogo de dependencias (dgeneral).", "danger");
   }
 
   // Submit del formulario (crear / actualizar)
@@ -352,9 +430,8 @@ document.addEventListener("DOMContentLoaded", () => {
           msg = "Usuario actualizado correctamente.";
         }
 
-        if (usuarioModalInstance) {
-          usuarioModalInstance.hide();
-        }
+        if (usuarioModalInstance) usuarioModalInstance.hide();
+
         showAlert(msg, "success");
         await fetchUsuarios();
       } catch (err) {
@@ -395,10 +472,7 @@ document.addEventListener("DOMContentLoaded", () => {
           await fetchUsuarios();
         } catch (err) {
           console.error("[DELETE-USUARIO] Error:", err);
-          showAlert(
-            err.message || "No se pudo eliminar el usuario",
-            "danger"
-          );
+          showAlert(err.message || "No se pudo eliminar el usuario", "danger");
         }
       }
     });

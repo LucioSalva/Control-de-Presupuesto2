@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="es">
+
 <head>
   <meta charset="utf-8" />
   <title>Suficiencia Presupuestal 2025</title>
@@ -45,10 +46,14 @@
     <div class="container-fluid">
       <ul class="navbar-nav me-auto mb-2 mb-lg-0" style="flex-direction: row;">
         <li class="nav-item"><a class="nav-link" href="index.html"><i class="bi bi-house me-1"></i>Presupuesto</a></li>
-        <li class="nav-item"><a class="nav-link" href="partidas.html"><i class="bi bi-list-check me-1"></i>Partidas Detalladas</a></li>
-        <li class="nav-item"><a class="nav-link" href="projects.html"><i class="bi bi-diagram-3 me-1"></i>Proyectos</a></li>
-        <li class="nav-item"><a class="nav-link" href="reporte-ejecucion.html"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Ejecución</a></li>
-        <li class="nav-item"><a class="nav-link active" href="suficiencia_presupuestal.html"><i class="bi bi-pencil me-1"></i>Suficiencia Presupuestal</a></li>
+        <li class="nav-item"><a class="nav-link" href="partidas.html"><i class="bi bi-list-check me-1"></i>Partidas
+            Detalladas</a></li>
+        <li class="nav-item"><a class="nav-link" href="projects.html"><i class="bi bi-diagram-3 me-1"></i>Proyectos</a>
+        </li>
+        <li class="nav-item"><a class="nav-link" href="reporte-ejecucion.html"><i
+              class="bi bi-file-earmark-spreadsheet me-1"></i>Ejecución</a></li>
+        <li class="nav-item"><a class="nav-link active" href="suficiencia_presupuestal.html"><i
+              class="bi bi-pencil me-1"></i>Suficiencia Presupuestal</a></li>
       </ul>
     </div>
   </nav>
@@ -80,8 +85,13 @@
       </div>
       <div class="col-3">
         <table class="table table-bordered mb-0">
-          <tr><th class="table-header">No. de Suficiencia</th></tr>
-          <tr><td><input type="text" class="form-control form-control-sm" name="no_suficiencia"></td></tr>
+          <tr>
+            <th class="table-header">No. de Suficiencia</th>
+          </tr>
+          <tr>
+            <td><input type="text" class="form-control form-control-sm ro ro-folio" name="no_suficiencia" readonly>
+            </td>
+          </tr>
         </table>
       </div>
     </div>
@@ -92,7 +102,8 @@
         <th class="table-header" style="width:15%;">Fecha</th>
         <td style="width:35%;"><input type="date" class="form-control form-control-sm" name="fecha"></td>
         <th class="table-header" style="width:15%;">Dependencia / Unidad Responsable</th>
-        <td style="width:35%;"><input type="text" class="form-control form-control-sm" name="dependencia"></td>
+        <td style="width:35%;"><input type="text" class="form-control form-control-sm" name="dependencia" readonly>
+        </td>
       </tr>
       <tr>
         <th class="table-header">Dirección / Departamento</th>
@@ -135,80 +146,99 @@
       <textarea class="form-control form-control-sm" rows="3" name="justificacion_general"></textarea>
     </div>
 
-   <!-- Detalle (dinámico) -->
-<div class="d-flex align-items-center justify-content-between mb-2">
-  <div class="fw-bold" style="font-size: 11px;">Detalle:</div>
+    <!-- Detalle (dinámico) -->
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <div class="fw-bold" style="font-size: 11px;">Detalle:</div>
 
-  <!-- botón + -->
-  <button id="btn-add-row" type="button" class="btn btn-sm btn-outline-primary">
-    <i class="bi bi-plus-lg"></i>
-  </button>
-</div>
+      <!-- botón + -->
+      <button id="btn-add-row" type="button" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-plus-lg"></i>
+      </button>
 
-<table class="table table-bordered mb-3">
-  <thead>
-    <tr>
-      <th class="table-header" style="width: 5%;">No.</th>
-      <th class="table-header" style="width: 12%;">Clave</th>
-      <th class="table-header" style="width: 20%;">Concepto de partida</th>
-      <th class="table-header" style="width: 20%;">Justificación</th>
-      <th class="table-header" style="width: 33%;">Descripción</th>
-      <th class="table-header" style="width: 10%;">Importe solicitado</th>
-    </tr>
-  </thead>
+      <tbody id="detalleBody"></tbody>
+    </div>
 
-  <tbody id="detalleBody">
-    <!-- JS inserta 3 filas al cargar -->
-  </tbody>
-</table>
+    <table class="table table-bordered mb-3">
+      <thead>
+        <tr>
+          <th class="table-header" style="width: 5%;">No.</th>
+          <th class="table-header" style="width: 12%;">Clave</th>
+          <th class="table-header" style="width: 20%;">Concepto de partida</th>
+          <th class="table-header" style="width: 20%;">Justificación</th>
+          <th class="table-header" style="width: 33%;">Descripción</th>
+          <th class="table-header" style="width: 10%;">Importe solicitado</th>
+        </tr>
+      </thead>
 
-<!-- Totales -->
-<table class="table table-bordered mb-2">
-  <tr>
-    <th class="table-header text-center" style="width: 85%;">TOTAL:</th>
-    <td style="width: 15%;">
-      <input type="text" class="form-control form-control-sm text-end" name="total" value="0.00" readonly>
+      <tbody id="detalleBody">
+        <!-- JS inserta 3 filas al cargar -->
+      </tbody>
+    </table>
 
-    </td>
-  </tr>
-</table>
+    <!-- Totales -->
+    <table class="table table-bordered mb-2">
+      <tr>
+        <th class="table-header text-center" style="width: 85%;">TOTAL:</th>
+        <td style="width: 15%;">
+          <input type="text" class="form-control form-control-sm text-end ro" name="total" value="0.00" readonly>
 
-<table class="table table-bordered mb-4">
-  <tr>
-    <th class="table-header" style="width: 15%;">CANTIDAD CON LETRA:</th>
-    <td style="width: 85%;">
-      <input type="text" class="form-control form-control-sm" name="cantidad_con_letra" readonly>
+        </td>
+      </tr>
+    </table>
 
-    </td>
-  </tr>
-</table>
+    <table class="table table-bordered mb-4">
+      <tr>
+        <th class="table-header" style="width: 15%;">CANTIDAD CON LETRA:</th>
+        <td style="width: 85%;">
+          <input type="text" class="form-control form-control-sm ro" name="cantidad_con_letra" readonly>
+
+        </td>
+      </tr>
+    </table>
 
     <!-- Leyenda (imagen 5) -->
     <div class="border p-2" style="font-size:11px; text-align:justify;">
       <p class="mb-2">
-        La presente suficiencia presupuestal únicamente acredita la disponibilidad de recursos en la(s) clave(s) indicada(s),
-        sin que ello implique autorización para realizar procesos de licitación, adjudicación, contratación, adquisición, pago
+        La presente suficiencia presupuestal únicamente acredita la disponibilidad de recursos en la(s) clave(s)
+        indicada(s),
+        sin que ello implique autorización para realizar procesos de licitación, adjudicación, contratación,
+        adquisición, pago
         o validación documental, los cuales son responsabilidad exclusiva del ÁREA SOLICITANTE.
       </p>
       <p class="mb-2">
-        Esta autorización se emite con base en el techo presupuestal aprobado para la unidad administrativa correspondiente,
-        siendo también responsabilidad del ÁREA SOLICITANTE la planeación, administración, verificación y comprobación del uso de los recursos.
+        Esta autorización se emite con base en el techo presupuestal aprobado para la unidad administrativa
+        correspondiente,
+        siendo también responsabilidad del ÁREA SOLICITANTE la planeación, administración, verificación y comprobación
+        del uso de los recursos.
       </p>
       <p class="mb-2">
-        El ejercicio del gasto deberá apegarse a lo establecido en el Clasificador por Objeto del Gasto Estatal y Municipal,
-        incluido en el Manual para la Planeación, Programación y Presupuesto de Egresos Municipal vigente, en los Lineamientos Generales
-        para la Evaluación de Programas Presupuestarios Municipales, y en la normatividad municipal, estatal y complementaria aplicable.
+        El ejercicio del gasto deberá apegarse a lo establecido en el Clasificador por Objeto del Gasto Estatal y
+        Municipal,
+        incluido en el Manual para la Planeación, Programación y Presupuesto de Egresos Municipal vigente, en los
+        Lineamientos Generales
+        para la Evaluación de Programas Presupuestarios Municipales, y en la normatividad municipal, estatal y
+        complementaria aplicable.
       </p>
       <p class="mb-0">
-        El recurso deberá ejercerse en el mismo mes de emisión de esta suficiencia; en caso contrario, perderá validez y deberá tramitarse nuevamente con fecha del mes en curso.
+        El recurso deberá ejercerse en el mismo mes de emisión de esta suficiencia; en caso contrario, perderá validez y
+        deberá tramitarse nuevamente con fecha del mes en curso.
       </p>
     </div>
 
     <!-- Firmas -->
     <div class="row mt-4">
-      <div class="col-4 firma"><div class="firma-linea"></div><div>Elaboró</div></div>
-      <div class="col-4 firma"><div class="firma-linea"></div><div>Revisó</div></div>
-      <div class="col-4 firma"><div class="firma-linea"></div><div>Autorizó</div></div>
+      <div class="col-4 firma">
+        <div class="firma-linea"></div>
+        <div>Elaboró</div>
+      </div>
+      <div class="col-4 firma">
+        <div class="firma-linea"></div>
+        <div>Revisó</div>
+      </div>
+      <div class="col-4 firma">
+        <div class="firma-linea"></div>
+        <div>Autorizó</div>
+      </div>
     </div>
   </div>
 
@@ -222,18 +252,20 @@
         </div>
         <div class="modal-body">¿Estás seguro de guardar la Suficiencia Presupuestal?</div>
         <div class="modal-footer">
-          <button id="btn-no-seguro" type="button" class="btn btn-secondary" data-bs-dismiss="modal">No estoy seguro</button>
+          <button id="btn-no-seguro" type="button" class="btn btn-secondary" data-bs-dismiss="modal">No estoy
+            seguro</button>
           <button id="btn-si-seguro" type="button" class="btn btn-success">Sí, estoy seguro</button>
         </div>
       </div>
     </div>
   </div>
 
+  <script src="js/config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="js/suficiencia_presupuestal.js"></script>
   <script src="js/script.js"></script>
-  <script src="js/partidas.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="js/user-info.js"></script>
 </body>
+
 </html>

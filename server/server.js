@@ -173,6 +173,24 @@ app.post("/api/login", async (req, res) => {
 });
 
 /* =====================================================
+   SUFICIENCIA PRESUPUESTAL - FOLIO
+   ===================================================== */
+app.get("/api/suficiencias/next-folio", async (_req, res) => {
+  try {
+    const r = await query(`
+      SELECT COALESCE(MAX(folio_num), 0) + 1 AS folio_num
+      FROM suficiencias
+    `);
+    res.json({ folio_num: Number(r.rows[0].folio_num) });
+  } catch (e) {
+    console.error("GET /api/suficiencias/next-folio", e);
+    res.status(500).json({ error: "Error obteniendo folio" });
+  }
+});
+
+
+
+/* =====================================================
    DETALLES (partidas por proyecto)
    ===================================================== */
 
@@ -817,6 +835,131 @@ app.get("/api/catalogos/proyectos", async (_req, res) => {
   }
 });
 
+
+
+/* =====================================================
+   SUFICIENCIA PRESUPUESTAL
+   ===================================================== */
+
+app.post("/api/suficiencias", async (req, res) => {
+  const {
+    fecha,
+    dependencia,
+    departamento,
+    programa,
+    proyecto,
+    fuente,
+    partida,
+    mes_pago,
+    justificacion_general,
+    cantidad_con_letra,
+    total,
+    detalle = [],
+  } = req.body || {};
+
+  const totalNum = Number(total || 0);
+
+  if (!fecha) return res.status(400).json({ error: "fecha es obligatoria" });
+  if (!Array.isArray(detalle)) return res.status(400).json({ error: "detalle debe ser arreglo" });
+
+  const client = await getClient();
+  try {
+    await client.query("BEGIN");
+
+    // Evita duplicados de folio por concurrencia
+    await client.query("LOCK TABLE suficiencias IN EXCLUSIVE MODE");
+
+    const folioQ = await client.query(`
+      SELECT COALESCE(MAX(folio_num), 0) + 1 AS folio_num
+      FROM suficiencias
+    `);
+    const folio_num = Number(folioQ.rows[0].folio_num);
+
+    // INSERT cabecera (ajusta nombres de columnas si difieren)
+    const insCab = await client.query(
+      `
+      INSERT INTO suficiencias (
+        folio_num,
+        fecha,
+        dependencia,
+        departamento,
+        programa,
+        proyecto,
+        fuente,
+        partida,
+        mes_pago,
+        justificacion_general,
+        cantidad_con_letra,
+        total
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      RETURNING id, folio_num;
+      `,
+      [
+        folio_num,
+        fecha,
+        dependencia || null,
+        departamento || null,
+        programa || null,
+        proyecto || null,
+        fuente || null,
+        partida || null,
+        mes_pago || null,
+        justificacion_general || null,
+        cantidad_con_letra || null,
+        totalNum,
+      ]
+    );
+
+    const id = insCab.rows[0].id;
+
+    // INSERT detalle
+    // Ajusta nombres de columnas si tu tabla "suficiencia_detalle" difiere
+    for (let idx = 0; idx < detalle.length; idx++) {
+      const r = detalle[idx] || {};
+      const no = idx + 1;
+
+      await client.query(
+        `
+        INSERT INTO suficiencia_detalle (
+          id_suficiencia,
+          no,
+          clave,
+          concepto_partida,
+          justificacion,
+          descripcion,
+          importe
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+        `,
+        [
+          id,
+          no,
+          String(r.clave || "").trim() || null,
+          String(r.concepto_partida || "").trim() || null,
+          String(r.justificacion || "").trim() || null,
+          String(r.descripcion || "").trim() || null,
+          Number(r.importe || 0),
+        ]
+      );
+    }
+
+    await client.query("COMMIT");
+    res.json({ ok: true, id, folio_num });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error("POST /api/suficiencias", e);
+    res.status(500).json({ error: "Error guardando suficiencia" });
+  } finally {
+    client.release();
+  }
+});
+
+
+
+
+
+
 /* =====================================================
    ADMINISTRACIÓN DE USUARIOS (CRUD)
    ===================================================== */
@@ -1044,19 +1187,34 @@ app.delete("/api/admin/usuarios/:id", async (req, res) => {
   }
 });
 
+app.get("/api/catalogos/partidas", async (_req, res) => {
+  try {
+    const r = await query(`
+      SELECT id, clave, descripcion
+      FROM partidas
+      ORDER BY clave
+    `);
+    res.json(r.rows);
+  } catch (e) {
+    console.error("GET /api/catalogos/partidas", e);
+    res.status(500).json({ error: "Error obteniendo catálogo partidas" });
+  }
+});
+
+
+
+
 /* =====================================================
    404 — RUTAS NO ENCONTRADAS
    (DEBE ir ANTES del app.listen)
    ===================================================== */
 app.use((req, res) => {
-  // API -> 404 JSON
   if (req.originalUrl.startsWith("/api/")) {
     return res.status(404).json({ error: "Ruta de API no encontrada" });
   }
-
-  // Frontend -> 404.html en server/public
   return res.status(404).sendFile(path.join(__dirname, "public", "404.html"));
 });
+
 
 /* ======================== Arranque ============================= */
 const PORT = process.env.PORT || 3000;

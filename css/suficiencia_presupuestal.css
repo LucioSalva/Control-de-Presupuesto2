@@ -253,3 +253,34 @@ body {
     top: 100px;
   }
 }
+
+
+/* =========================
+   READONLY: que NO parezca input editable
+   ========================= */
+.form-container .form-control.ro[readonly],
+.form-container .form-control.ro:read-only {
+  background: transparent !important;   /* sin fondo blanco */
+  border: none !important;             /* sin borde */
+  box-shadow: none !important;         /* sin sombra */
+  padding-left: 0 !important;          /* que parezca texto */
+  padding-right: 0 !important;
+  color: #000 !important;
+  font-weight: 700;                    /* resalta */
+  cursor: default;                     /* no cursor de texto */
+}
+
+/* Si quieres mantener alineación derecha en total */
+.form-container .form-control.ro.text-end[readonly],
+.form-container .form-control.ro.text-end:read-only {
+  padding-right: 0 !important;
+}
+
+/* Opcional: desactiva selección para que se sienta "etiqueta" */
+.form-container .form-control.ro[readonly] {
+  user-select: none;
+}
+.form-container .ro-folio[readonly] {
+  font-size: 14px;
+  letter-spacing: 1px;
+}

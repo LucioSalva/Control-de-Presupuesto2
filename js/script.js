@@ -48,7 +48,7 @@ function getCurrentUserRoleFlags() {
 const { esAdmin } = getCurrentUserRoleFlags();
 
 const PROJECT_KEYS_KEY = "cp_current_project_keys";
-const API_URL = "http://localhost:3000";
+const API = window.API_URL;
 
 function normalizeKey(value) {
   return String(value || "").trim().toLowerCase();

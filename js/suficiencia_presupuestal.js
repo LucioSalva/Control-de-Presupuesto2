@@ -1,7 +1,13 @@
 (() => {
-  const MAX_ROWS = 14;
+  const MAX_ROWS = 20;
   const START_ROWS = 3;
 
+  // ✅ API base: si no existe window.API_URL, usa localhost:3000
+  const API = (window.API_URL || "http://localhost:3000").replace(/\/$/, "");
+
+  // ---------------------------
+  // DOM
+  // ---------------------------
   const btnGuardar = document.getElementById("btn-guardar");
   const btnSi = document.getElementById("btn-si-seguro");
   const btnDescargar = document.getElementById("btn-descargar-excel");
@@ -10,14 +16,16 @@
   const detalleBody = document.getElementById("detalleBody");
 
   const modalEl = document.getElementById("modalConfirm");
-  const modal = new bootstrap.Modal(modalEl);
+  const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
 
   let lastSavedId = null;
 
   // ---------------------------
-  // AUTH
+  // AUTH  ✅ (incluye cp_token)
   // ---------------------------
   const getToken = () =>
+    localStorage.getItem("cp_token") ||
+    sessionStorage.getItem("cp_token") ||
     localStorage.getItem("token") ||
     sessionStorage.getItem("token") ||
     localStorage.getItem("authToken") ||
@@ -33,14 +41,106 @@
   // Helpers DOM
   // ---------------------------
   const get = (name) => document.querySelector(`[name="${name}"]`)?.value ?? "";
+
   const setVal = (name, value) => {
     const el = document.querySelector(`[name="${name}"]`);
-    if (el) el.value = value;
+    if (el) el.value = value ?? "";
   };
 
   function safeNumber(n) {
     const x = Number(n);
     return Number.isFinite(x) ? x : 0;
+  }
+
+  // ✅ helper: evita "Unexpected token <"
+  async function fetchJson(url, options = {}) {
+    const r = await fetch(url, options);
+    const text = await r.text();
+
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      // no es JSON
+    }
+
+    if (!r.ok) {
+      const msg = data?.error || `HTTP ${r.status} en ${url}`;
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  // ---------------------------
+  // Folio (No. Suficiencia)
+  // ---------------------------
+  async function loadNextFolio() {
+    const data = await fetchJson(`${API}/api/suficiencias/next-folio`, {
+      headers: { ...authHeaders() },
+    });
+    setVal("no_suficiencia", String(data.folio_num).padStart(6, "0"));
+  }
+
+  // ---------------------------
+  // Catálogo de partidas
+  // ---------------------------
+  let partidasMap = {}; // { "5151": "Bienes informáticos", ... }
+
+  async function loadPartidasCatalog() {
+    const data = await fetchJson(`${API}/api/catalogos/partidas`, {
+      headers: { ...authHeaders() },
+    });
+
+    partidasMap = {};
+    for (const row of data || []) {
+      const clave = String(row.clave || "").trim();
+      const desc = String(row.descripcion || "").trim();
+      if (clave) partidasMap[clave] = desc;
+    }
+  }
+
+  // ---------------------------
+  // Dependencia readonly desde usuario (dgeneral)
+  // ---------------------------
+  function getLoggedUser() {
+    try {
+      return JSON.parse(localStorage.getItem("cp_usuario") || "null");
+    } catch {
+      return null;
+    }
+  }
+
+  async function setDependenciaReadonly() {
+    // fuerza readonly visual y real
+    const depEl = document.querySelector(`[name="dependencia"]`);
+    if (depEl) depEl.readOnly = true;
+
+    const user = getLoggedUser();
+
+    // 1) Si login trae el nombre directo
+    if (user?.dgeneral_nombre) {
+      setVal("dependencia", user.dgeneral_nombre);
+      return;
+    }
+
+    // 2) Si trae id_dgeneral, lo resolvemos por catálogo
+    if (user?.id_dgeneral) {
+      const data = await fetchJson(`${API}/api/catalogos/dgeneral`, {
+        headers: { ...authHeaders() },
+      });
+
+      const found = (data || []).find(
+        (x) => Number(x.id) === Number(user.id_dgeneral)
+      );
+
+      if (found?.dependencia) {
+        setVal("dependencia", found.dependencia);
+        return;
+      }
+    }
+
+    // 3) fallback
+    setVal("dependencia", "");
   }
 
   // ---------------------------
@@ -54,15 +154,24 @@
     return `
       <tr data-row="${i}">
         <td style="width: 5%;">
-          <input type="number" class="form-control form-control-sm" value="${i}" readonly>
+          <input type="text" class="form-control form-control-sm ro text-center" value="${i}" readonly>
         </td>
 
         <td style="width: 12%;">
-          <input type="text" class="form-control form-control-sm" name="r${i}_clave" placeholder="Clave">
+          <input type="text"
+            class="form-control form-control-sm sp-clave"
+            name="r${i}_clave"
+            placeholder="5151"
+            inputmode="numeric"
+            maxlength="4">
         </td>
 
         <td style="width: 20%;">
-          <input type="text" class="form-control form-control-sm" name="r${i}_concepto" placeholder="Concepto de partida">
+          <input type="text"
+            class="form-control form-control-sm ro"
+            name="r${i}_concepto"
+            placeholder="(automático)"
+            readonly>
         </td>
 
         <td style="width: 20%;">
@@ -90,15 +199,13 @@
       alert(`Máximo ${MAX_ROWS} renglones.`);
       return;
     }
+
     detalleBody.insertAdjacentHTML("beforeend", rowTemplate(next));
     refreshTotalAndLetter();
   }
 
   function initRows() {
     if (!detalleBody) return;
-
-    // Si ya traes filas fijas en el HTML, NO las duplicamos
-    // (en tu caso ya cambiaste a tbody vacío con id=detalleBody)
     detalleBody.innerHTML = "";
     for (let i = 0; i < START_ROWS; i++) addRow();
   }
@@ -108,7 +215,9 @@
   // ---------------------------
   function buildDetalle() {
     const rows = [];
-    for (let i = 1; i <= MAX_ROWS; i++) {
+    const n = rowCount();
+
+    for (let i = 1; i <= n; i++) {
       rows.push({
         clave: get(`r${i}_clave`),
         concepto_partida: get(`r${i}_concepto`),
@@ -121,7 +230,7 @@
   }
 
   function calcTotal(detalle) {
-    return detalle.reduce((acc, r) => acc + safeNumber(r?.importe), 0);
+    return (detalle || []).reduce((acc, r) => acc + safeNumber(r?.importe), 0);
   }
 
   function refreshTotalAndLetter() {
@@ -132,10 +241,35 @@
     setVal("cantidad_con_letra", numeroALetrasMX(total));
   }
 
-  // recalcular total al cambiar importes
+  // Listener: total + clave->concepto
   document.addEventListener("input", (e) => {
+    // total
     if (e.target && e.target.classList.contains("sp-importe")) {
       refreshTotalAndLetter();
+      return;
+    }
+
+    // clave (4 dígitos + concepto)
+    if (e.target && e.target.classList.contains("sp-clave")) {
+      e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4);
+
+      const name = e.target.getAttribute("name"); // r1_clave
+      const match = name?.match(/^r(\d+)_clave$/);
+      if (!match) return;
+
+      const i = match[1];
+      const clave = e.target.value;
+
+      if (clave.length === 4) {
+        const concepto = partidasMap[clave] || "";
+        setVal(`r${i}_concepto`, concepto);
+
+        e.target.classList.toggle("is-valid", !!concepto);
+        e.target.classList.toggle("is-invalid", !concepto);
+      } else {
+        setVal(`r${i}_concepto`, "");
+        e.target.classList.remove("is-valid", "is-invalid");
+      }
     }
   });
 
@@ -224,14 +358,13 @@
   }
 
   // ---------------------------
-  // Payload y Guardado
+  // Guardado
   // ---------------------------
   function buildPayload() {
     const detalle = buildDetalle();
     const total = calcTotal(detalle);
 
     return {
-      no_suficiencia: get("no_suficiencia"),
       fecha: get("fecha"),
       dependencia: get("dependencia"),
       departamento: get("departamento"),
@@ -251,7 +384,7 @@
     refreshTotalAndLetter();
     const payload = buildPayload();
 
-    const r = await fetch("/api/suficiencias", {
+    const data = await fetchJson(`${API}/api/suficiencias`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -260,42 +393,70 @@
       body: JSON.stringify(payload),
     });
 
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || "No se pudo guardar");
-
     lastSavedId = data.id;
 
-    btnDescargar.classList.remove("disabled");
-    btnDescargar.href = `/api/suficiencias/${lastSavedId}/excel`;
+    if (data.folio_num != null) {
+      setVal("no_suficiencia", String(data.folio_num).padStart(6, "0"));
+    }
+
+    if (btnDescargar) {
+      btnDescargar.classList.remove("disabled");
+      btnDescargar.href = `${API}/api/suficiencias/${lastSavedId}/excel`;
+    }
 
     alert("Guardado correctamente. Ya puedes descargar el Excel.");
   }
 
   // ---------------------------
-  // Eventos
+  // Eventos (una sola vez)
   // ---------------------------
-  btnAddRow?.addEventListener("click", addRow);
+  function bindEvents() {
+    if (btnAddRow) btnAddRow.addEventListener("click", addRow);
 
-  btnGuardar?.addEventListener("click", (e) => {
-    e.preventDefault();
-    modal.show();
-  });
+    btnGuardar?.addEventListener("click", (e) => {
+      e.preventDefault();
+      modal?.show();
+    });
 
-  btnSi?.addEventListener("click", async () => {
-    try {
-      btnSi.disabled = true;
-      await save();
-      modal.hide();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      btnSi.disabled = false;
+    btnSi?.addEventListener("click", async () => {
+      try {
+        btnSi.disabled = true;
+        await save();
+        modal?.hide();
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        btnSi.disabled = false;
+      }
+    });
+  }
+
+  // ---------------------------
+  // INIT
+  // ---------------------------
+  async function init() {
+    if (!detalleBody) {
+      console.error("[SP] No existe #detalleBody. Revisa el id en el HTML.");
+      return;
     }
-  });
 
-  // ---------------------------
-  // Init
-  // ---------------------------
-  initRows();
-  refreshTotalAndLetter();
+    initRows();
+    refreshTotalAndLetter();
+    bindEvents();
+
+    // ✅ dependencia readonly desde usuario
+    try { await setDependenciaReadonly(); } catch (e) { console.warn("[SP] dependencia:", e.message); }
+
+    // backend opcional (no rompe filas)
+    try { await loadPartidasCatalog(); } catch (e) { console.warn("[SP] catálogo partidas:", e.message); }
+    try { await loadNextFolio(); } catch (e) { console.warn("[SP] folio:", e.message); }
+  }
+
+  // Si tu script está al final del body, DOM ya existe.
+  // Si no, esperamos DOMContentLoaded.
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 })();

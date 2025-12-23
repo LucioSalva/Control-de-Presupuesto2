@@ -64,3 +64,87 @@ body {
 .form-text {
   font-size: 0.75rem;
 }
+
+
+#tablaUsuarios td, #tablaUsuarios th {
+  vertical-align: middle;
+}
+
+#tablaUsuarios td:nth-child(4) { /* Correo */
+  max-width: 220px;
+  word-break: break-word;
+}
+
+#tablaUsuarios td:nth-child(5),
+#tablaUsuarios td:nth-child(6) { /* Dependencias */
+  max-width: 260px;
+  white-space: normal;
+}
+
+/* ===== Look & feel más profesional ===== */
+.page-header h4{
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+
+.card {
+  border: 0;
+  border-radius: 14px;
+}
+
+.card-body{
+  padding: 1.25rem 1.25rem;
+}
+
+.table thead th{
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: #6c757d;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+}
+
+.table tbody tr{
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.table tbody tr:hover{
+  background: rgba(13,110,253,.04);
+}
+
+.table td{
+  vertical-align: middle;
+  padding-top: .8rem;
+  padding-bottom: .8rem;
+}
+
+/* Columna nombre */
+td.col-nombre{
+  font-weight: 600;
+}
+
+/* Chips / badges */
+.badge-role{
+  font-weight: 700;
+  padding: .35rem .55rem;
+  border-radius: 999px;
+  letter-spacing: .03em;
+}
+
+/* Botones acciones más compactos */
+.btn-action{
+  min-width: 92px;
+  border-radius: 10px;
+}
+
+/* Mantener columnas compactas */
+th, td { white-space: nowrap; }
+td.wrap { white-space: normal; }
+
+/* Fecha más discreta */
+td.col-fecha{ color:#6c757d; font-size:.9rem; }
+
+/* Responsive: cuando no quepa, deja que dependencias se rompan */
+@media (max-width: 992px){
+  td.wrap { white-space: normal; }
+}

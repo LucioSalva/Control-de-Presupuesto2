@@ -86,10 +86,10 @@
       <div class="col-3">
         <table class="table table-bordered mb-0">
           <tr>
-            <th class="table-header">No. de Suficiencia</th>
+            <th class="table-header" style="background-color: rgb(180, 180, 180);">No. de Suficiencia</th>
           </tr>
           <tr>
-            <td><input type="text" class="form-control form-control-sm ro ro-folio" name="no_suficiencia" readonly>
+            <td><input type="text" class="form-control form-control-sm ro ro-folio" style="text-align: end;" name="no_suficiencia" readonly>
             </td>
           </tr>
         </table>
@@ -108,7 +108,12 @@
 
     <th class="table-header" style="width:15%;">FECHA DE ELABORACIÓN:</th>
     <td style="width:35%;">
-      <input type="date" class="form-control form-control-sm" name="fecha">
+      <input
+  type="date"
+  class="form-control form-control-sm"
+  name="fecha"
+  readonly
+>
     </td>
   </tr>
 
@@ -138,7 +143,7 @@
       </select>
     </td>
 
-    <th class="table-header">PROGRAMACIÓN DE PAGO:</th>
+    <th class="table-header" style="background-color: rgb(180, 180, 180);;">PROGRAMACIÓN DE PAGO:</th>
     <td>
       <select class="form-select form-select-sm" name="mes_pago">
         <option value="ENERO">ENERO</option>
@@ -180,12 +185,12 @@
     <table class="table table-bordered mb-3">
       <thead>
         <tr>
-          <th class="table-header" style="width: 5%;">No.</th>
-          <th class="table-header" style="width: 12%;">Clave</th>
-          <th class="table-header" style="width: 20%;">Concepto de partida</th>
-          <th class="table-header" style="width: 20%;">Justificación</th>
-          <th class="table-header" style="width: 33%;">Descripción</th>
-          <th class="table-header" style="width: 10%;">Importe solicitado</th>
+          <th class="table-header" style="width: 5%; background-color: rgb(180, 180, 180);">No.</th>
+          <th class="table-header" style="width: 12%; background-color: rgb(180, 180, 180);">Clave</th>
+          <th class="table-header" style="width: 20%; background-color: rgb(180, 180, 180);">Concepto de partida</th>
+          <th class="table-header" style="width: 20%; background-color: rgb(180, 180, 180);">Justificación</th>
+          <th class="table-header" style="width: 33%; background-color: rgb(180, 180, 180);">Descripción</th>
+          <th class="table-header" style="width: 10%; background-color: rgb(180, 180, 180);">Importe solicitado</th>
         </tr>
       </thead>
 
@@ -194,20 +199,86 @@
       </tbody>
     </table>
 
-    <!-- Totales -->
-    <table class="table table-bordered mb-2">
-      <tr>
-        <th class="table-header text-center" style="width: 85%;">TOTAL:</th>
-        <td style="width: 15%;">
-          <input type="text" class="form-control form-control-sm text-end ro" name="total" value="0.00" readonly>
+<!-- META + TOTALES (META ABARCA 4 FILAS) -->
+<table class="table table-bordered mb-2">
+  <tr>
+    <th class="table-header align-middle text-center" style="width:15%; background-color: rgb(180, 180, 180);;" rowspan="4">
+  META:
+</th>
 
-        </td>
-      </tr>
-    </table>
+<td class="align-middle" style="width:65%;" rowspan="4">
+  <div class="d-flex align-items-center h-100">
+    <input
+      type="text"
+      class="form-control form-control-sm"
+      name="meta"
+      placeholder="Escribe la meta..."
+    >
+  </div>
+</td>
 
+
+    <!-- SUBTOTAL -->
+    <th class="table-header text-end" style="width:10%; background-color: rgb(180, 180, 180);">SUBTOTAL:</th>
+    <td style="width:10%;">
+      <input type="text" class="form-control form-control-sm text-end ro" name="subtotal" value="0.00" readonly>
+    </td>
+  </tr>
+
+  <tr>
+    <!-- IVA -->
+    <th class="table-header text-end" style="background-color: rgb(180, 180, 180);">IVA:</th>
+    <td>
+      <input type="text" class="form-control form-control-sm text-end ro" name="iva" value="0.00" readonly>
+    </td>
+  </tr>
+
+  <tr>
+    <!-- ISR -->
+    <th class="table-header text-end" style="background-color: rgb(180, 180, 180);">ISR:</th>
+    <td>
+      <input type="text" class="form-control form-control-sm text-end ro" name="isr" value="0.00" readonly>
+    </td>
+  </tr>
+
+  <tr>
+    <!-- TOTAL -->
+    <th class="table-header text-end" style="background-color: rgb(180, 180, 180);">TOTAL:</th>
+    <td>
+      <input type="text" class="form-control form-control-sm text-end ro" name="total" value="0.00" readonly>
+    </td>
+  </tr>
+</table>
+
+
+<!-- CONTROLES IVA/ISR (FUERA DE LA TABLA para no deformar el formato) -->
+<div class="d-flex align-items-center justify-content-end gap-3 mb-3">
+  <div class="form-check m-0">
+    <input class="form-check-input" type="radio" name="impuesto_tipo" value="NONE" checked>
+    <label class="form-check-label">Sin impuesto</label>
+  </div>
+
+  <div class="form-check m-0">
+    <input class="form-check-input" type="radio" name="impuesto_tipo" value="IVA">
+    <label class="form-check-label">IVA 16%</label>
+  </div>
+
+  <div class="form-check m-0">
+    <input class="form-check-input" type="radio" name="impuesto_tipo" value="ISR">
+    <label class="form-check-label">ISR</label>
+  </div>
+
+  <select class="form-select form-select-sm" name="isr_tasa" style="width:120px;" disabled>
+    <option value="0.10">10%</option>
+    <option value="0.0125">1.25%</option>
+    <option value="0.04">4%</option>
+  </select>
+</div>
+
+    <!-- Cantidad con letra -->
     <table class="table table-bordered mb-4">
       <tr>
-        <th class="table-header" style="width: 15%;">CANTIDAD CON LETRA:</th>
+        <th class="table-header" style="width: 15%; background-color: rgb(180, 180, 180);">CANTIDAD CON LETRA:</th>
         <td style="width: 85%;">
           <input type="text" class="form-control form-control-sm ro" name="cantidad_con_letra" readonly>
 
@@ -215,8 +286,8 @@
       </tr>
     </table>
 
-    <!-- Leyenda (imagen 5) -->
-    <div class="border p-2" style="font-size:11px; text-align:justify;">
+    <!-- Leyenda-->
+    <div class="border p-2" style="font-size:11px; text-align:justify; background-color: rgb(180, 180, 180);">
       <p class="mb-2">
         La presente suficiencia presupuestal únicamente acredita la disponibilidad de recursos en la(s) clave(s)
         indicada(s),

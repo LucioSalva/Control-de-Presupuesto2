@@ -57,6 +57,12 @@ function buildHttpError(message, statusCode = 400) {
   return err;
 }
 
+function getActorId(req) {
+  const actorId = Number(req.headers["x-user-id"] || 0);
+  return Number.isFinite(actorId) && actorId > 0 ? actorId : null;
+}
+
+
 /**
  * Valida que vengan id_dgeneral, id_dauxiliar, id_fuente
  * y el id_proyecto alfanumérico desde el front.
@@ -129,6 +135,7 @@ app.post("/api/login", async (req, res) => {
              ) AS roles
       FROM usuarios u
       LEFT JOIN dgeneral d ON d.id = u.id_dgeneral
+      LEFT JOIN dauxiliar da ON da.id = u.id_dauxiliar
       WHERE u.usuario = $1
       LIMIT 1;
     `;
@@ -187,8 +194,6 @@ app.get("/api/suficiencias/next-folio", async (_req, res) => {
     res.status(500).json({ error: "Error obteniendo folio" });
   }
 });
-
-
 
 /* =====================================================
    DETALLES (partidas por proyecto)
@@ -352,7 +357,8 @@ app.post("/api/gastos", async (req, res) => {
     const fecha = req.body.fecha || null;
     const descripcion = req.body.descripcion || null;
 
-    if (!project) return res.status(400).json({ error: "project es obligatorio" });
+    if (!project)
+      return res.status(400).json({ error: "project es obligatorio" });
     if (!partida || isNaN(monto) || monto <= 0) {
       return res.status(400).json({ error: "partida y monto > 0 requeridos" });
     }
@@ -380,7 +386,8 @@ app.post("/api/gastos", async (req, res) => {
       if (!detResult.rows.length) {
         await client.query("ROLLBACK");
         return res.status(400).json({
-          error: "No existe presupuesto para la partida seleccionada en este proyecto.",
+          error:
+            "No existe presupuesto para la partida seleccionada en este proyecto.",
         });
       }
 
@@ -435,7 +442,16 @@ app.post("/api/gastos", async (req, res) => {
         )
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         `,
-        [id_dgeneral, id_dauxiliar, id_fuente, project, partida, fecha, descripcion, monto]
+        [
+          id_dgeneral,
+          id_dauxiliar,
+          id_fuente,
+          project,
+          partida,
+          fecha,
+          descripcion,
+          monto,
+        ]
       );
 
       const tot = await client.query(
@@ -449,7 +465,11 @@ app.post("/api/gastos", async (req, res) => {
       );
       const total_gastado = Number(tot.rows[0].total_gastado || 0);
 
-      const saldo = computeSaldo({ presupuesto, total_gastado, total_reconducido });
+      const saldo = computeSaldo({
+        presupuesto,
+        total_gastado,
+        total_reconducido,
+      });
 
       const upd = await client.query(
         `
@@ -501,7 +521,9 @@ app.delete("/api/gastos/:id", async (req, res) => {
 
       const { idProyecto, partida } = old.rows[0];
 
-      await client.query(`DELETE FROM public.gastos_detalle WHERE id = $1`, [id]);
+      await client.query(`DELETE FROM public.gastos_detalle WHERE id = $1`, [
+        id,
+      ]);
 
       const tot = await client.query(
         `SELECT COALESCE(SUM(monto),0) AS total_gastado
@@ -567,9 +589,12 @@ app.post("/api/reconducir", async (req, res) => {
     const concepto = req.body.concepto || null;
     const fecha = req.body.fecha || null;
 
-    if (!project) return res.status(400).json({ error: "project es obligatorio" });
+    if (!project)
+      return res.status(400).json({ error: "project es obligatorio" });
     if (!origen || !destino || isNaN(monto) || monto <= 0) {
-      return res.status(400).json({ error: "origen, destino y monto > 0 requeridos" });
+      return res
+        .status(400)
+        .json({ error: "origen, destino y monto > 0 requeridos" });
     }
 
     const client = await getClient();
@@ -593,7 +618,8 @@ app.post("/api/reconducir", async (req, res) => {
       if (!qOrigen.rows.length) {
         await client.query("ROLLBACK");
         return res.status(400).json({
-          error: "No existe presupuesto para la partida origen en este proyecto.",
+          error:
+            "No existe presupuesto para la partida origen en este proyecto.",
         });
       }
 
@@ -628,7 +654,13 @@ app.post("/api/reconducir", async (req, res) => {
              saldo_disponible
            )
            VALUES (NOW(), $1,$2,$3, $4, $5, 0,0,0,0)`,
-          [origenRow.id_dgeneral, origenRow.id_dauxiliar, origenRow.id_fuente, project, destino]
+          [
+            origenRow.id_dgeneral,
+            origenRow.id_dauxiliar,
+            origenRow.id_fuente,
+            project,
+            destino,
+          ]
         );
 
         qDestino = await client.query(
@@ -667,7 +699,8 @@ app.post("/api/reconducir", async (req, res) => {
         [nuevoReconOrigen, fecha, concepto, saldoOrigen, project, origen]
       );
 
-      const nuevoReconDestino = Number(destinoRow.total_reconducido || 0) + monto;
+      const nuevoReconDestino =
+        Number(destinoRow.total_reconducido || 0) + monto;
 
       const saldoDestino = computeSaldo({
         presupuesto: destinoRow.presupuesto,
@@ -711,9 +744,13 @@ app.post("/api/reconducir", async (req, res) => {
 app.delete("/api/project", async (req, res) => {
   try {
     const project = String(req.query.project || "").trim();
-    if (!project) return res.status(400).json({ error: "project es obligatorio" });
+    if (!project)
+      return res.status(400).json({ error: "project es obligatorio" });
 
-    const r = await query("DELETE FROM presupuesto_detalle WHERE id_proyecto = $1", [project]);
+    const r = await query(
+      "DELETE FROM presupuesto_detalle WHERE id_proyecto = $1",
+      [project]
+    );
     res.json({ ok: true, deleted_rows: r.rowCount });
   } catch (e) {
     console.error("DELETE /api/project", e);
@@ -787,7 +824,9 @@ app.get("/api/check-recon-duplicates", async (req, res) => {
    ===================================================== */
 app.get("/api/catalogos/dgeneral", async (_req, res) => {
   try {
-    const r = await query(`SELECT id, clave, dependencia FROM dgeneral ORDER BY clave`);
+    const r = await query(
+      `SELECT id, clave, dependencia FROM dgeneral ORDER BY clave`
+    );
     res.json(r.rows);
   } catch (e) {
     console.error("GET /api/catalogos/dgeneral", e);
@@ -797,7 +836,9 @@ app.get("/api/catalogos/dgeneral", async (_req, res) => {
 
 app.get("/api/catalogos/dauxiliar", async (_req, res) => {
   try {
-    const r = await query(`SELECT id, clave, dependencia FROM dauxiliar ORDER BY clave`);
+    const r = await query(
+      `SELECT id, clave, dependencia FROM dauxiliar ORDER BY clave`
+    );
     res.json(r.rows);
   } catch (e) {
     console.error("GET /api/catalogos/dauxiliar", e);
@@ -807,7 +848,9 @@ app.get("/api/catalogos/dauxiliar", async (_req, res) => {
 
 app.get("/api/catalogos/fuentes", async (_req, res) => {
   try {
-    const r = await query(`SELECT id, clave, fuente FROM fuentes ORDER BY clave`);
+    const r = await query(
+      `SELECT id, clave, fuente FROM fuentes ORDER BY clave`
+    );
     res.json(r.rows);
   } catch (e) {
     console.error("GET /api/catalogos/fuentes", e);
@@ -817,7 +860,9 @@ app.get("/api/catalogos/fuentes", async (_req, res) => {
 
 app.get("/api/catalogos/programas", async (_req, res) => {
   try {
-    const r = await query(`SELECT id, clave, descripcion FROM programas ORDER BY clave`);
+    const r = await query(
+      `SELECT id, clave, descripcion FROM programas ORDER BY clave`
+    );
     res.json(r.rows);
   } catch (e) {
     console.error("GET /api/catalogos/programas", e);
@@ -827,15 +872,15 @@ app.get("/api/catalogos/programas", async (_req, res) => {
 
 app.get("/api/catalogos/proyectos", async (_req, res) => {
   try {
-    const r = await query(`SELECT id, clave, descripcion FROM proyectos ORDER BY clave`);
+    const r = await query(
+      `SELECT id, clave, descripcion FROM proyectos ORDER BY clave`
+    );
     res.json(r.rows);
   } catch (e) {
     console.error("GET /api/catalogos/proyectos", e);
     res.status(500).json({ error: "Error obteniendo catálogo proyectos" });
   }
 });
-
-
 
 /* =====================================================
    SUFICIENCIA PRESUPUESTAL
@@ -860,7 +905,8 @@ app.post("/api/suficiencias", async (req, res) => {
   const totalNum = Number(total || 0);
 
   if (!fecha) return res.status(400).json({ error: "fecha es obligatoria" });
-  if (!Array.isArray(detalle)) return res.status(400).json({ error: "detalle debe ser arreglo" });
+  if (!Array.isArray(detalle))
+    return res.status(400).json({ error: "detalle debe ser arreglo" });
 
   const client = await getClient();
   try {
@@ -955,11 +1001,6 @@ app.post("/api/suficiencias", async (req, res) => {
   }
 });
 
-
-
-
-
-
 /* =====================================================
    ADMINISTRACIÓN DE USUARIOS (CRUD)
    ===================================================== */
@@ -967,7 +1008,7 @@ app.post("/api/suficiencias", async (req, res) => {
 // LISTA completa (única versión)
 app.get("/api/admin/usuarios", async (_req, res) => {
   try {
-    const sql = `
+        const sql = `
       SELECT
         u.id,
         u.nombre_completo,
@@ -975,21 +1016,39 @@ app.get("/api/admin/usuarios", async (_req, res) => {
         u.correo,
         u.activo,
         u.fecha_creacion,
+
+        -- Dependencia general
         u.id_dgeneral,
-        d.clave       AS dgeneral_clave,
-        d.dependencia AS dgeneral_nombre,
+        dg.clave AS dgeneral_clave,
+        dg.dependencia AS dgeneral_nombre,
+
+        -- Dependencia auxiliar ✅
+        u.id_dauxiliar,
+        da.clave AS dauxiliar_clave,
+        da.dependencia AS dauxiliar_nombre,
+
+        -- Roles (igual que login, pero en lista) ✅
         COALESCE(
-          ARRAY_AGG(r.clave ORDER BY r.clave)
-          FILTER (WHERE r.clave IS NOT NULL),
-          '{}'::varchar[]
+          ARRAY_AGG(DISTINCT r.clave) FILTER (WHERE r.clave IS NOT NULL),
+          '{}'::text[]
         ) AS roles
-      FROM usuarios u
-      LEFT JOIN dgeneral d      ON d.id = u.id_dgeneral
-      LEFT JOIN usuario_rol ur  ON ur.id_usuario = u.id
-      LEFT JOIN roles r         ON r.id = ur.id_rol
-      GROUP BY u.id, d.clave, d.dependencia
+
+      FROM public.usuarios u
+      LEFT JOIN public.dgeneral dg ON dg.id = u.id_dgeneral
+      LEFT JOIN public.dauxiliar da ON da.id = u.id_dauxiliar
+      LEFT JOIN public.usuario_rol ur ON ur.id_usuario = u.id
+      LEFT JOIN public.roles r ON r.id = ur.id_rol
+
+      GROUP BY
+        u.id,
+        dg.clave,
+        dg.dependencia,
+        da.clave,
+        da.dependencia
+
       ORDER BY u.id;
     `;
+
 
     const result = await query(sql);
     res.json(result.rows);
@@ -1006,35 +1065,83 @@ app.post("/api/admin/usuarios", async (req, res) => {
     correo,
     password,
     id_dgeneral,
+    id_dauxiliar, // ✅ NUEVO
     activo = true,
     roles = [],
   } = req.body;
 
+  const actorId = getActorId(req);
+
+await client.query(
+  `
+  UPDATE usuarios
+     SET nombre_completo = $1,
+         usuario         = $2,
+         correo          = $3,
+         password        = $4,
+         id_dgeneral     = $5,
+         id_dauxiliar    = $6,
+         activo          = $7,
+         updated_by      = $8,
+         updated_at      = NOW()
+   WHERE id = $9;
+  `,
+  [
+    nombre_completo,
+    usuario,
+    correo || null,
+    password,
+    id_dgeneral || null,
+    id_dauxiliar || null,
+    !!activo,
+    actorId, // ✅ quien modificó
+    id,
+  ]
+);
+
+
+
   if (!nombre_completo || !usuario || !password) {
-    return res
-      .status(400)
-      .json({ error: "Nombre completo, usuario y contraseña son obligatorios" });
+    return res.status(400).json({
+      error: "Nombre completo, usuario y contraseña son obligatorios",
+    });
   }
 
   const client = await getClient();
   try {
     await client.query("BEGIN");
 
+    const actorId = getActorId(req);
+
     const ins = await client.query(
       `
       INSERT INTO usuarios (
-        nombre_completo,
-        usuario,
-        correo,
-        password,
-        id_dgeneral,
-        activo
-      )
-      VALUES ($1,$2,$3,$4,$5,$6)
-      RETURNING id;
-      `,
-      [nombre_completo, usuario, correo || null, password, id_dgeneral || null, !!activo]
-    );
+    nombre_completo,
+    usuario,
+    correo,
+    password,
+    id_dgeneral,
+    id_dauxiliar,
+    activo,
+    updated_by,
+    updated_at
+  )
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+  RETURNING id;
+  `,
+  [
+    nombre_completo,
+    usuario,
+    correo || null,
+    password,
+    id_dgeneral || null,
+    id_dauxiliar || null,
+    !!activo,
+    actorId, // ✅ quien lo creó
+  ]
+);
+
+
 
     const newId = ins.rows[0].id;
 
@@ -1069,13 +1176,16 @@ app.post("/api/admin/usuarios", async (req, res) => {
     console.error("POST /api/admin/usuarios ERROR:", e);
 
     if (e.code === "23505") {
-      return res.status(400).json({ error: "Usuario o correo ya existen en el sistema" });
+      return res
+        .status(400)
+        .json({ error: "Usuario o correo ya existen en el sistema" });
     }
     res.status(500).json({ error: "Error creando usuario" });
   } finally {
     client.release();
   }
 });
+
 
 app.put("/api/admin/usuarios/:id", async (req, res) => {
   const id = Number(req.params.id || 0);
@@ -1087,12 +1197,15 @@ app.put("/api/admin/usuarios/:id", async (req, res) => {
     correo,
     password,
     id_dgeneral,
+    id_dauxiliar, // ✅ NUEVO
     activo = true,
     roles = [],
   } = req.body;
 
   if (!nombre_completo || !usuario) {
-    return res.status(400).json({ error: "Nombre completo y usuario son obligatorios" });
+    return res.status(400).json({
+      error: "Nombre completo y usuario son obligatorios",
+    });
   }
 
   const client = await getClient();
@@ -1108,10 +1221,20 @@ app.put("/api/admin/usuarios/:id", async (req, res) => {
                correo          = $3,
                password        = $4,
                id_dgeneral     = $5,
-               activo          = $6
-         WHERE id = $7;
+               id_dauxiliar    = $6,
+               activo          = $7
+         WHERE id = $8;
         `,
-        [nombre_completo, usuario, correo || null, password, id_dgeneral || null, !!activo, id]
+        [
+          nombre_completo,
+          usuario,
+          correo || null,
+          password,
+          id_dgeneral || null,
+          id_dauxiliar || null,
+          !!activo,
+          id,
+        ]
       );
     } else {
       await client.query(
@@ -1121,10 +1244,19 @@ app.put("/api/admin/usuarios/:id", async (req, res) => {
                usuario         = $2,
                correo          = $3,
                id_dgeneral     = $4,
-               activo          = $5
-         WHERE id = $6;
+               id_dauxiliar    = $5,
+               activo          = $6
+         WHERE id = $7;
         `,
-        [nombre_completo, usuario, correo || null, id_dgeneral || null, !!activo, id]
+        [
+          nombre_completo,
+          usuario,
+          correo || null,
+          id_dgeneral || null,
+          id_dauxiliar || null,
+          !!activo,
+          id,
+        ]
       );
     }
 
@@ -1159,7 +1291,9 @@ app.put("/api/admin/usuarios/:id", async (req, res) => {
     console.error("PUT /api/admin/usuarios/:id ERROR:", e);
 
     if (e.code === "23505") {
-      return res.status(400).json({ error: "Usuario o correo ya existen en el sistema" });
+      return res
+        .status(400)
+        .json({ error: "Usuario o correo ya existen en el sistema" });
     }
     res.status(500).json({ error: "Error actualizando usuario" });
   } finally {
@@ -1201,9 +1335,6 @@ app.get("/api/catalogos/partidas", async (_req, res) => {
   }
 });
 
-
-
-
 /* =====================================================
    404 — RUTAS NO ENCONTRADAS
    (DEBE ir ANTES del app.listen)
@@ -1214,7 +1345,6 @@ app.use((req, res) => {
   }
   return res.status(404).sendFile(path.join(__dirname, "public", "404.html"));
 });
-
 
 /* ======================== Arranque ============================= */
 const PORT = process.env.PORT || 3000;

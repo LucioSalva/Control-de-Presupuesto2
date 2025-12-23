@@ -72,6 +72,26 @@
   }
 
   // ---------------------------
+  // Fecha automática (hoy) + readonly
+  // ---------------------------
+  function setFechaHoy() {
+    const el = document.querySelector('[name="fecha"]');
+    if (!el) return;
+
+    // bloquea edición
+    el.readOnly = true;
+
+    // Si ya trae valor (por ejemplo si más adelante cargas un registro), NO lo pisamos.
+    if (el.value) return;
+
+    const hoy = new Date();
+    const yyyy = hoy.getFullYear();
+    const mm = String(hoy.getMonth() + 1).padStart(2, "0");
+    const dd = String(hoy.getDate()).padStart(2, "0");
+    el.value = `${yyyy}-${mm}-${dd}`;
+  }
+
+  // ---------------------------
   // Folio (No. Suficiencia)
   // ---------------------------
   async function loadNextFolio() {
@@ -157,43 +177,37 @@
     }
   }
 
-  // 👉 OJO: ajusta esta ruta a la que uses en projects.html
+  // ✅ MISMA lógica que projects.js (usa /api/projects y campo project)
   async function loadProyectosProgramaticos() {
-  const user = getLoggedUser();
+    const user = getLoggedUser();
 
-  const roles = Array.isArray(user?.roles) ? user.roles : [];
-  const rolesNorm = roles.map(r => String(r).trim().toUpperCase());
-  const isArea = rolesNorm.includes("AREA");
-  const myIdDg = user?.id_dgeneral != null ? Number(user.id_dgeneral) : null;
+    const roles = Array.isArray(user?.roles) ? user.roles : [];
+    const rolesNorm = roles.map((r) => String(r).trim().toUpperCase());
+    const isArea = rolesNorm.includes("AREA");
+    const myIdDg = user?.id_dgeneral != null ? Number(user.id_dgeneral) : null;
 
-  // 👇 Esta es la misma ruta que usa projects.js
-  const data = await fetchJson(`${API}/api/projects`, {
-    headers: { ...authHeaders() },
-  });
-
-  let projects = Array.isArray(data) ? data : [];
-
-  // 🔒 mismo filtro que projects.js para usuarios AREA
-  if (isArea && myIdDg != null) {
-    projects = projects.filter(p => {
-      const projIdDg = p.id_dgeneral != null ? Number(p.id_dgeneral) : null;
-      return projIdDg === myIdDg;
+    const data = await fetchJson(`${API}/api/projects`, {
+      headers: { ...authHeaders() },
     });
+
+    let projects = Array.isArray(data) ? data : [];
+
+    if (isArea && myIdDg != null) {
+      projects = projects.filter((p) => {
+        const projIdDg = p.id_dgeneral != null ? Number(p.id_dgeneral) : null;
+        return projIdDg === myIdDg;
+      });
+    }
+
+    setOptions(
+      "id_proyecto_programatico",
+      projects,
+      (p) => p.project,
+      (p) => p.project
+    );
+
+    console.log("[SP] proyectos cargados:", projects.length);
   }
-
-  // OJO: el campo se llama "project"
-  // value y label serán el mismo string L001...
-  setOptions(
-    "id_proyecto_programatico",
-    projects,
-    (p) => p.project,
-    (p) => p.project
-  );
-
-  console.log("[SP] proyectos cargados:", projects.length);
-}
-
-
 
   async function loadFuentesCatalog() {
     const data = await fetchJson(`${API}/api/catalogos/fuentes`, {
@@ -205,7 +219,8 @@
       "fuente",
       data,
       (x) => x.id,
-      (x) => `${String(x.clave ?? "").trim()} - ${String(x.fuente ?? "").trim()}`
+      (x) =>
+        `${String(x.clave ?? "").trim()} - ${String(x.fuente ?? "").trim()}`
     );
   }
 
@@ -219,7 +234,8 @@
       "programa",
       data,
       (x) => x.id,
-      (x) => `${String(x.clave ?? "").trim()} - ${String(x.descripcion ?? "").trim()}`
+      (x) =>
+        `${String(x.clave ?? "").trim()} - ${String(x.descripcion ?? "").trim()}`
     );
   }
 
@@ -250,7 +266,7 @@
           <input type="text"
             class="form-control form-control-sm ro"
             name="r${i}_concepto"
-            placeholder="(automático)"
+            placeholder="Nombre de la Partida"
             readonly>
         </td>
 
@@ -281,7 +297,7 @@
     }
 
     detalleBody.insertAdjacentHTML("beforeend", rowTemplate(next));
-    refreshTotalAndLetter();
+    refreshTotales();
   }
 
   function initRows() {
@@ -291,7 +307,7 @@
   }
 
   // ---------------------------
-  // Total + letra
+  // Subtotal + IVA/ISR + Total + letra
   // ---------------------------
   function buildDetalle() {
     const rows = [];
@@ -309,22 +325,55 @@
     return rows;
   }
 
-  function calcTotal(detalle) {
+  function calcSubtotal(detalle) {
     return (detalle || []).reduce((acc, r) => acc + safeNumber(r?.importe), 0);
   }
 
-  function refreshTotalAndLetter() {
-    const detalle = buildDetalle();
-    const total = calcTotal(detalle);
+  function getImpuestoTipo() {
+    return (
+      document.querySelector('input[name="impuesto_tipo"]:checked')?.value ||
+      "NONE"
+    );
+  }
 
+  function getIsrRate() {
+    const sel = document.querySelector('[name="isr_tasa"]');
+    const val = sel ? Number(sel.value) : 0;
+    return Number.isFinite(val) ? val : 0;
+  }
+
+  function refreshTotales() {
+    const detalle = buildDetalle();
+    const subtotal = calcSubtotal(detalle);
+
+    const tipo = getImpuestoTipo();
+
+    let iva = 0;
+    let isr = 0;
+
+    if (tipo === "IVA") {
+      iva = subtotal * 0.16;
+      isr = 0;
+    } else if (tipo === "ISR") {
+      const rate = getIsrRate();
+      isr = subtotal * rate;
+      iva = 0;
+    }
+
+    const total = subtotal + iva + isr;
+
+    setVal("subtotal", subtotal.toFixed(2));
+    setVal("iva", iva.toFixed(2));
+    setVal("isr", isr.toFixed(2));
     setVal("total", total.toFixed(2));
+
     setVal("cantidad_con_letra", numeroALetrasMX(total));
   }
 
-  // Listener: total + clave->concepto
+  // Listener: importes + clave->concepto
   document.addEventListener("input", (e) => {
     if (e.target && e.target.classList.contains("sp-importe")) {
-      refreshTotalAndLetter();
+      refreshTotales();
       return;
     }
 
@@ -436,11 +485,40 @@
   }
 
   // ---------------------------
+  // Impuestos: eventos y reglas (solo IVA o ISR)
+  // ---------------------------
+  function bindTaxEvents() {
+    const radios = document.querySelectorAll('input[name="impuesto_tipo"]');
+    const isrSel = document.querySelector('[name="isr_tasa"]');
+
+    radios.forEach((r) => {
+      r.addEventListener("change", () => {
+        const tipo = getImpuestoTipo();
+        if (isrSel) isrSel.disabled = tipo !== "ISR";
+        refreshTotales();
+      });
+    });
+
+    isrSel?.addEventListener("change", refreshTotales);
+
+    // estado inicial
+    if (isrSel) isrSel.disabled = getImpuestoTipo() !== "ISR";
+  }
+
+  // ---------------------------
   // Guardado
   // ---------------------------
   function buildPayload() {
     const detalle = buildDetalle();
-    const total = calcTotal(detalle);
+    const subtotal = calcSubtotal(detalle);
+
+    const impuesto_tipo = getImpuestoTipo();
+    const isr_tasa = getIsrRate();
+
+    // Los inputs ya tienen el cálculo (refrescados)
+    const iva = safeNumber(get("iva"));
+    const isr = safeNumber(get("isr"));
+    const total = safeNumber(get("total"));
 
     return {
       fecha: get("fecha"),
@@ -451,14 +529,21 @@
       id_programa: get("programa"),
 
       mes_pago: get("mes_pago"),
-      cantidad_con_letra: get("cantidad_con_letra"),
+
+      impuesto_tipo, // NONE | IVA | ISR
+      isr_tasa,      // 0.10 etc
+      subtotal,
+      iva,
+      isr,
       total,
+
+      cantidad_con_letra: get("cantidad_con_letra"),
       detalle,
     };
   }
 
   async function save() {
-    refreshTotalAndLetter();
+    refreshTotales();
     const payload = buildPayload();
 
     const data = await fetchJson(`${API}/api/suficiencias`, {
@@ -506,6 +591,9 @@
         btnSi.disabled = false;
       }
     });
+
+    // ✅ impuestos
+    bindTaxEvents();
   }
 
   // ---------------------------
@@ -517,8 +605,10 @@
       return;
     }
 
+    // ✅ fecha automática (hoy) bloqueada
+    setFechaHoy();
+
     initRows();
-    refreshTotalAndLetter();
     bindEvents();
 
     try { await setDependenciaReadonly(); } catch (e) { console.warn("[SP] dependencia:", e.message); }
@@ -528,13 +618,17 @@
 
     // ✅ combos
     try {
-  await loadProyectosProgramaticos();
-} catch (e) {
-  console.error("[SP] proyectos:", e.message);
-  alert("No se pudieron cargar los PROYECTOS. Revisa consola (F12) > Network/Console.");
-}
+      await loadProyectosProgramaticos();
+    } catch (e) {
+      console.error("[SP] proyectos:", e.message);
+      alert("No se pudieron cargar los PROYECTOS. Revisa consola (F12) > Network/Console.");
+    }
+
     try { await loadFuentesCatalog(); } catch (e) { console.warn("[SP] fuentes:", e.message); }
     try { await loadProgramasCatalog(); } catch (e) { console.warn("[SP] programas:", e.message); }
+
+    // primer cálculo completo
+    refreshTotales();
   }
 
   if (document.readyState === "loading") {

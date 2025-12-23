@@ -5,6 +5,9 @@ const ADMIN_API_BASE = "http://localhost:3000";
 const ENDPOINT_USUARIOS = `${ADMIN_API_BASE}/api/admin/usuarios`;
 const ENDPOINT_DGENERAL = `${ADMIN_API_BASE}/api/catalogos/dgeneral`;
 
+// ✅ NUEVO: catálogo dependencia auxiliar
+const ENDPOINT_DAUXILIAR = `${ADMIN_API_BASE}/api/catalogos/dauxiliar`;
+
 // Solo estos roles existen en la tabla roles (GOD, ADMIN, AREA)
 const ROLES_VALIDOS = ["GOD", "ADMIN", "AREA"];
 
@@ -55,6 +58,9 @@ let usuariosCache = [];
 let usuarioModalInstance = null;
 
 let dgeneralCatalog = []; // catálogo dgeneral para el select
+// ✅ NUEVO: catálogo dauxiliar para el select
+let dauxiliarCatalog = [];
+
 let editingMode = false;  // true cuando editas, false cuando creas
 
 // =====================================================
@@ -116,6 +122,42 @@ function fillDgeneralSelect() {
   sel.innerHTML = `<option value="">Seleccione...</option>`;
 
   dgeneralCatalog.forEach((r) => {
+    const opt = document.createElement("option");
+    opt.value = String(r.id);
+    opt.textContent = `${r.clave} — ${r.dependencia}`;
+    sel.appendChild(opt);
+  });
+}
+
+// =====================================================
+// ✅ NUEVO: CATALOGO DAUXILIAR (SELECT)
+// =====================================================
+async function fetchDauxiliarCatalog() {
+  const res = await fetch(ENDPOINT_DAUXILIAR, {
+    headers: { "Content-Type": "application/json" },
+  });
+
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const msg = (data && data.error) || "Error cargando catálogo dauxiliar";
+    throw new Error(msg);
+  }
+
+  if (!Array.isArray(data)) {
+    throw new Error("Catálogo dauxiliar inválido");
+  }
+
+  dauxiliarCatalog = data;
+}
+
+function fillDauxiliarSelect() {
+  const sel = document.getElementById("idDauxiliar");
+  if (!sel) return;
+
+  sel.innerHTML = `<option value="">Seleccione...</option>`;
+
+  dauxiliarCatalog.forEach((r) => {
     const opt = document.createElement("option");
     opt.value = String(r.id);
     opt.textContent = `${r.clave} — ${r.dependencia}`;
@@ -205,6 +247,7 @@ function renderTablaUsuarios() {
   const tbody = document.querySelector("#tablaUsuarios tbody");
   const emptyState = document.getElementById("emptyState");
   const resumen = document.getElementById("usuariosResumen");
+  
 
   if (!tbody) return;
   tbody.innerHTML = "";
@@ -219,28 +262,44 @@ function renderTablaUsuarios() {
 
   usuariosCache.forEach((u) => {
     const tr = document.createElement("tr");
-    const roles = Array.isArray(u.roles) ? u.roles.join(", ") : "";
+    const rolesHtml = Array.isArray(u.roles)
+  ? u.roles.map((r) => {
+      const rol = String(r || "").toUpperCase();
+      const cls =
+        rol === "GOD"   ? "text-bg-dark" :
+        rol === "ADMIN" ? "text-bg-primary" :
+        rol === "AREA"  ? "text-bg-secondary" :
+                          "text-bg-light";
+      return `<span class="badge ${cls} badge-role me-1">${rol}</span>`;
+    }).join("")
+  : "";
+
+  
 
     tr.innerHTML = `
-      <td>${u.id}</td>
-      <td>${u.nombre_completo || ""}</td>
-      <td>${u.usuario || ""}</td>
-      <td>${u.correo || ""}</td>
-      <td>${u.dgeneral_nombre || ""}</td>
-      <td>${roles}</td>
-      <td>${u.activo ? "Sí" : "No"}</td>
-      <td>${formatFecha(u.fecha_creacion)}</td>
-      <td class="text-center">
-        <button class="btn btn-sm btn-outline-primary me-1"
-                data-action="edit" data-id="${u.id}">
-          Editar
-        </button>
-        <button class="btn btn-sm btn-outline-danger"
-                data-action="delete" data-id="${u.id}">
-          Eliminar
-        </button>
-      </td>
-    `;
+  <td>${u.id}</td>
+  <td class="col-nombre">${u.nombre_completo || ""}</td>
+  <td>${u.usuario || ""}</td>
+
+  <td class="wrap">${u.dgeneral_nombre || ""}</td>
+  <td class="wrap">${u.dauxiliar_nombre || ""}</td>
+
+  <td>${rolesHtml}</td>
+  <td>${u.activo ? `<span class="badge text-bg-success badge-role">ACTIVO</span>` : `<span class="badge text-bg-danger badge-role">INACTIVO</span>`}</td>
+  <td class="col-fecha">${formatFecha(u.fecha_creacion)}</td>
+
+  <td class="text-center">
+    <button class="btn btn-sm btn-outline-primary btn-action me-1"
+            data-action="edit" data-id="${u.id}">
+      ✏️ Editar
+    </button>
+    <button class="btn btn-sm btn-outline-danger btn-action"
+            data-action="delete" data-id="${u.id}">
+      🗑️ Eliminar
+    </button>
+  </td>
+`;
+
     tbody.appendChild(tr);
   });
 
@@ -298,6 +357,11 @@ function abrirModalEditarUsuario(usuario) {
   document.getElementById("usuarioInput").value = usuario.usuario || "";
   document.getElementById("correo").value = usuario.correo || "";
   document.getElementById("idDgeneral").value = usuario.id_dgeneral ? String(usuario.id_dgeneral) : "";
+
+  // ✅ NUEVO: setear dependencia auxiliar en edición
+  const da = document.getElementById("idDauxiliar");
+  if (da) da.value = usuario.id_dauxiliar ? String(usuario.id_dauxiliar) : "";
+
   document.getElementById("activo").checked = !!usuario.activo;
 
   setPasswordMode(true);
@@ -325,6 +389,10 @@ function limpiarFormularioUsuario() {
   const dg = document.getElementById("idDgeneral");
   if (dg) dg.value = "";
 
+  // ✅ NUEVO: (select dauxiliar): vacío por default
+  const da = document.getElementById("idDauxiliar");
+  if (da) da.value = "";
+
   document.querySelectorAll(".rol-check").forEach((chk) => {
     chk.checked = false;
   });
@@ -343,6 +411,10 @@ function obtenerPayloadFormulario() {
 
   const idDgeneralStr = document.getElementById("idDgeneral").value.trim();
   const id_dgeneral = idDgeneralStr ? Number(idDgeneralStr) : null;
+
+  // ✅ NUEVO: id_dauxiliar
+  const idDauxiliarStr = (document.getElementById("idDauxiliar")?.value || "").trim();
+  const id_dauxiliar = idDauxiliarStr ? Number(idDauxiliarStr) : null;
 
   const activo = document.getElementById("activo").checked;
 
@@ -371,6 +443,8 @@ function obtenerPayloadFormulario() {
     usuario,
     correo: correo || null,
     id_dgeneral,
+    // ✅ NUEVO
+    id_dauxiliar,
     activo,
     roles,
   };
@@ -411,6 +485,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch (e) {
     console.error("[DGENERAL] Error:", e);
     showAlert("No se pudo cargar el catálogo de dependencias (dgeneral).", "danger");
+  }
+
+  // ✅ NUEVO: Cargar catálogo dauxiliar y llenar select
+  try {
+    await fetchDauxiliarCatalog();
+    fillDauxiliarSelect();
+  } catch (e) {
+    console.error("[DAUXILIAR] Error:", e);
+    showAlert("No se pudo cargar el catálogo de dependencias (dauxiliar).", "danger");
   }
 
   // Submit del formulario (crear / actualizar)

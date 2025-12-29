@@ -10,10 +10,13 @@
   // ---------------------------
   const btnGuardar = document.getElementById("btn-guardar");
   const btnSi = document.getElementById("btn-si-seguro");
-  const btnDescargar = document.getElementById("btn-descargar-excel");
+  const btnDescargarExcel = document.getElementById("btn-descargar-excel");
+  const btnDescargarPdf = document.getElementById("btn-descargar-pdf");
 
   const btnAddRow = document.getElementById("btn-add-row");
   const detalleBody = document.getElementById("detalleBody");
+  const btnRemoveRow = document.getElementById("btn-remove-row");
+
 
   const modalEl = document.getElementById("modalConfirm");
   const modal = modalEl ? new bootstrap.Modal(modalEl) : null;
@@ -60,9 +63,7 @@
     let data = null;
     try {
       data = text ? JSON.parse(text) : null;
-    } catch {
-      // no es JSON
-    }
+    } catch {}
 
     if (!r.ok) {
       const msg = data?.error || `HTTP ${r.status} en ${url}`;
@@ -77,11 +78,7 @@
   function setFechaHoy() {
     const el = document.querySelector('[name="fecha"]');
     if (!el) return;
-
-    // bloquea edición
     el.readOnly = true;
-
-    // Si ya trae valor (por ejemplo si más adelante cargas un registro), NO lo pisamos.
     if (el.value) return;
 
     const hoy = new Date();
@@ -136,13 +133,11 @@
 
     const user = getLoggedUser();
 
-    // 1) Si login trae el nombre directo
     if (user?.dgeneral_nombre) {
       setVal("dependencia", user.dgeneral_nombre);
       return;
     }
 
-    // 2) Si trae id_dgeneral, lo resolvemos por catálogo
     if (user?.id_dgeneral) {
       const data = await fetchJson(`${API}/api/catalogos/dgeneral`, {
         headers: { ...authHeaders() },
@@ -177,7 +172,6 @@
     }
   }
 
-  // ✅ MISMA lógica que projects.js (usa /api/projects y campo project)
   async function loadProyectosProgramaticos() {
     const user = getLoggedUser();
 
@@ -205,8 +199,6 @@
       (p) => p.project,
       (p) => p.project
     );
-
-    console.log("[SP] proyectos cargados:", projects.length);
   }
 
   async function loadFuentesCatalog() {
@@ -214,7 +206,6 @@
       headers: { ...authHeaders() },
     });
 
-    // Esperado: [{id, clave, fuente}]
     setOptions(
       "fuente",
       data,
@@ -229,7 +220,6 @@
       headers: { ...authHeaders() },
     });
 
-    // Esperado: [{id, clave, descripcion}]
     setOptions(
       "programa",
       data,
@@ -299,6 +289,48 @@
     detalleBody.insertAdjacentHTML("beforeend", rowTemplate(next));
     refreshTotales();
   }
+  function renumberRows() {
+  const rows = detalleBody ? Array.from(detalleBody.querySelectorAll("tr")) : [];
+  rows.forEach((tr, idx) => {
+    const i = idx + 1;
+    tr.setAttribute("data-row", String(i));
+
+    // actualiza el No. visible
+    const noInput = tr.querySelector('td:first-child input');
+    if (noInput) noInput.value = String(i);
+
+    // actualiza names de inputs de la fila
+    const clave = tr.querySelector(".sp-clave");
+    const concepto = tr.querySelector(`[name^="r"][name$="_concepto"]`);
+    const just = tr.querySelector(`[name^="r"][name$="_justificacion"]`);
+    const desc = tr.querySelector(`[name^="r"][name$="_descripcion"]`);
+    const imp = tr.querySelector(".sp-importe");
+
+    if (clave) clave.name = `r${i}_clave`;
+    if (concepto) concepto.name = `r${i}_concepto`;
+    if (just) just.name = `r${i}_justificacion`;
+    if (desc) desc.name = `r${i}_descripcion`;
+    if (imp) imp.name = `r${i}_importe`;
+  });
+}
+
+function removeRow() {
+  if (!detalleBody) return;
+
+  const n = rowCount();
+  if (n <= START_ROWS) {
+    alert(`Debes dejar mínimo ${START_ROWS} filas.`);
+    return;
+  }
+
+  // quita la última fila
+  detalleBody.lastElementChild?.remove();
+
+  // renumera para que buildDetalle no se rompa
+  renumberRows();
+  refreshTotales();
+}
+
 
   function initRows() {
     if (!detalleBody) return;
@@ -315,6 +347,7 @@
 
     for (let i = 1; i <= n; i++) {
       rows.push({
+        no: i,
         clave: get(`r${i}_clave`),
         concepto_partida: get(`r${i}_concepto`),
         justificacion: get(`r${i}_justificacion`),
@@ -376,6 +409,12 @@
       refreshTotales();
       return;
     }
+
+    // ✅ Solo números en cantidad_pago
+  if (e.target && e.target.name === "cantidad_pago") {
+    e.target.value = e.target.value.replace(/\D/g, "");
+    return;
+  }
 
     if (e.target && e.target.classList.contains("sp-clave")) {
       e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4);
@@ -501,12 +540,11 @@
 
     isrSel?.addEventListener("change", refreshTotales);
 
-    // estado inicial
     if (isrSel) isrSel.disabled = getImpuestoTipo() !== "ISR";
   }
 
   // ---------------------------
-  // Guardado
+  // Guardado (API)
   // ---------------------------
   function buildPayload() {
     const detalle = buildDetalle();
@@ -515,7 +553,6 @@
     const impuesto_tipo = getImpuestoTipo();
     const isr_tasa = getIsrRate();
 
-    // Los inputs ya tienen el cálculo (refrescados)
     const iva = safeNumber(get("iva"));
     const isr = safeNumber(get("isr"));
     const total = safeNumber(get("total"));
@@ -530,13 +567,17 @@
 
       mes_pago: get("mes_pago"),
 
-      impuesto_tipo, // NONE | IVA | ISR
-      isr_tasa,      // 0.10 etc
+      cantidad_pago: get("cantidad_pago"),
+
+
+      impuesto_tipo,
+      isr_tasa,
       subtotal,
       iva,
       isr,
       total,
 
+      meta: get("meta"),
       cantidad_con_letra: get("cantidad_con_letra"),
       detalle,
     };
@@ -561,16 +602,205 @@
       setVal("no_suficiencia", String(data.folio_num).padStart(6, "0"));
     }
 
-    if (btnDescargar) {
-      btnDescargar.classList.remove("disabled");
-      btnDescargar.href = `${API}/api/suficiencias/${lastSavedId}/excel`;
+    if (btnDescargarExcel) {
+      btnDescargarExcel.classList.remove("disabled");
+      btnDescargarExcel.href = `${API}/api/suficiencias/${lastSavedId}/excel`;
     }
 
     alert("Guardado correctamente. Ya puedes descargar el Excel.");
   }
 
   // ---------------------------
-  // Eventos (una sola vez)
+  // PDF (AcroForm con pdf-lib)
+  // ---------------------------
+  function getSelectedText(selectName) {
+    const sel = document.querySelector(`[name="${selectName}"]`);
+    if (!sel) return "";
+    return sel.options?.[sel.selectedIndex]?.textContent?.trim() || "";
+  }
+
+  function splitFechaParts(fechaStr) {
+    // yyyy-mm-dd
+    const s = String(fechaStr || "").trim();
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return { d: "", m: "", y: "" };
+    return { y: m[1], m: m[2], d: m[3] };
+  }
+
+  function detalleToLines(detalle) {
+    // Regresa columnas como texto multilinea (para tus campos "No", "CLAVE", etc.)
+    const rows = (detalle || []).filter((r) => {
+      const hasAny =
+        String(r.clave || "").trim() ||
+        String(r.concepto_partida || "").trim() ||
+        String(r.justificacion || "").trim() ||
+        String(r.descripcion || "").trim() ||
+        safeNumber(r.importe) > 0;
+      return hasAny;
+    });
+
+    const colNo = [];
+    const colClave = [];
+    const colConcepto = [];
+    const colJust = [];
+    const colDesc = [];
+    const colImporte = [];
+
+    for (const r of rows) {
+      colNo.push(String(r.no ?? ""));
+      colClave.push(String(r.clave ?? "").trim());
+      colConcepto.push(String(r.concepto_partida ?? "").trim());
+      colJust.push(String(r.justificacion ?? "").trim());
+      colDesc.push(String(r.descripcion ?? "").trim());
+      colImporte.push(safeNumber(r.importe).toFixed(2));
+    }
+
+    return {
+      No: colNo.join("\n"),
+      CLAVE: colClave.join("\n"),
+      "CONCEPTO DE PARTIDA": colConcepto.join("\n"),
+      "JUSTIFICACIÓN": colJust.join("\n"),
+      "DESCRIPCIÓN": colDesc.join("\n"),
+      IMPORTE: colImporte.join("\n"),
+    };
+  }
+
+  async function fetchPdfTemplateBytes() {
+    const candidates = [
+      "./public/PDF/SUFICIENCIA_PRESUPUESTAL_2025.pdf", // VSCode Live Server
+      "./PDF/SUFICIENCIA_PRESUPUESTAL_2025.pdf",        // Express static /public
+      "/public/PDF/SUFICIENCIA_PRESUPUESTAL_2025.pdf",
+      "/PDF/SUFICIENCIA_PRESUPUESTAL_2025.pdf",
+    ];
+
+    let lastErr = null;
+
+    for (const url of candidates) {
+      try {
+        const r = await fetch(url, { cache: "no-store" });
+        const buf = await r.arrayBuffer();
+
+        // Validación rápida: header %PDF
+        const head = new Uint8Array(buf.slice(0, 5));
+        const headStr = String.fromCharCode(...head);
+        if (!headStr.startsWith("%PDF")) {
+          throw new Error(`No PDF header en ${url}`);
+        }
+        return buf;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+
+    throw lastErr || new Error("No se pudo cargar el PDF template.");
+  }
+
+  async function generarPDF() {
+    try {
+      refreshTotales();
+
+      if (!window.PDFLib?.PDFDocument) {
+        alert("Falta pdf-lib. Agrega el script de pdf-lib antes del módulo.");
+        return;
+      }
+
+      const payload = buildPayload();
+      const detalle = buildDetalle();
+      const { d, m, y } = splitFechaParts(payload.fecha);
+
+      // textos de combos
+      const proyectoTxt = getSelectedText("id_proyecto_programatico") || payload.id_proyecto_programatico;
+      const fuenteTxt = getSelectedText("fuente") || String(payload.id_fuente || "");
+      const programaTxt = getSelectedText("programa") || String(payload.id_programa || "");
+
+      // columnas detalle multilinea
+      const cols = detalleToLines(detalle);
+
+      // Mes pago: tu PDF tiene campos por mes (ENERO...DICIEMBRE)
+      const mesSel = String(payload.mes_pago || "").trim().toUpperCase();
+      const meses = [
+        "ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO",
+        "JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"
+      ];
+
+      const templateBytes = await fetchPdfTemplateBytes();
+      const pdfDoc = await PDFLib.PDFDocument.load(templateBytes);
+      const form = pdfDoc.getForm();
+
+      const setTextSafe = (fieldName, value) => {
+        try {
+          const f = form.getTextField(fieldName);
+          f.setText(String(value ?? ""));
+        } catch {
+          // si no existe el campo, no truena
+        }
+      };
+
+      // ====== CABECERA (según tus nombres de fields del PDF) ======
+      setTextSafe("NOMBRE DE LA DEPENDENCIA GENERAL:", payload.dependencia || "");
+      setTextSafe("CLAVE DE LA DEPENDENCIA Y PROGRAMÁTICA:", proyectoTxt || "");
+      setTextSafe("FUENTE DE FINANCIAMIENTO", fuenteTxt || "");
+      setTextSafe("NOMBRE F.F", programaTxt || ""); // si aquí quieres otra cosa, cámbialo
+
+      // fecha en 3 campos
+      setTextSafe("fechadia", d);
+      setTextSafe("fechames", m);
+      setTextSafe("fechayear", y);
+
+      // ====== PROGRAMACIÓN DE PAGO (marca solo el mes elegido) ======
+      for (const mes of meses) {
+        // tus nombres en PDF se ven como "ENEROPROGRAMACIÓN DE PAGO", etc.
+        const fname = `${mes}PROGRAMACIÓN DE PAGO`;
+        setTextSafe(fname, mes === mesSel ? "X" : "");
+      }
+      setTextSafe("CANTIDAD", String(payload.cantidad_pago || ""));
+
+      // ====== DETALLE (tus campos grandes) ======
+      setTextSafe("No", cols.No);
+      setTextSafe("CLAVE", cols.CLAVE);
+      setTextSafe("CONCEPTO DE PARTIDA", cols["CONCEPTO DE PARTIDA"]);
+      setTextSafe("JUSTIFICACIÓN", cols["JUSTIFICACIÓN"]);
+      setTextSafe("DESCRIPCIÓN", cols["DESCRIPCIÓN"]);
+      setTextSafe("IMPORTE", cols.IMPORTE);
+
+      // ====== TOTALES ======
+      setTextSafe("subtotal", safeNumber(payload.subtotal).toFixed(2));
+      setTextSafe("IVA", safeNumber(payload.iva).toFixed(2));
+      setTextSafe("ISR", safeNumber(payload.isr).toFixed(2));
+      setTextSafe("total", safeNumber(payload.total).toFixed(2));
+
+      setTextSafe("CANTIDAD CON LETRA:", payload.cantidad_con_letra || "");
+      setTextSafe("Meta", payload.meta || "");
+
+      // ====== FIRMAS (si quieres rellenarlas desde tu HTML, aquí mismo) ======
+      // setTextSafe("COORDINACIÓN ADMINISTRATIVA DEL ÁREA SOLICITANT", "...");
+      // setTextSafe("ÁREA SOLICITANTE", "...");
+      // setTextSafe("DIRECCIÓN SOLICITANTE", "...");
+
+      // Si quieres que ya NO se edite, aplana el formulario:
+      form.flatten();
+
+      const outBytes = await pdfDoc.save();
+      const blob = new Blob([outBytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+
+      const folio = (get("no_suficiencia") || "000000").trim();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `SUFICIENCIA_${folio}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (e) {
+      console.error("[PDF] Error:", e);
+      alert(e?.message || "Error generando PDF");
+    }
+  }
+
+  // ---------------------------
+  // Eventos
   // ---------------------------
   function bindEvents() {
     if (btnAddRow) btnAddRow.addEventListener("click", addRow);
@@ -592,7 +822,13 @@
       }
     });
 
-    // ✅ impuestos
+    // ✅ Descargar PDF
+    btnDescargarPdf?.addEventListener("click", (e) => {
+      e.preventDefault();
+      generarPDF();
+    });
+    btnRemoveRow?.addEventListener("click", removeRow);
+
     bindTaxEvents();
   }
 
@@ -605,29 +841,23 @@
       return;
     }
 
-    // ✅ fecha automática (hoy) bloqueada
     setFechaHoy();
 
     initRows();
     bindEvents();
 
     try { await setDependenciaReadonly(); } catch (e) { console.warn("[SP] dependencia:", e.message); }
-
     try { await loadPartidasCatalog(); } catch (e) { console.warn("[SP] catálogo partidas:", e.message); }
     try { await loadNextFolio(); } catch (e) { console.warn("[SP] folio:", e.message); }
 
-    // ✅ combos
-    try {
-      await loadProyectosProgramaticos();
-    } catch (e) {
+    try { await loadProyectosProgramaticos(); } catch (e) {
       console.error("[SP] proyectos:", e.message);
-      alert("No se pudieron cargar los PROYECTOS. Revisa consola (F12) > Network/Console.");
+      alert("No se pudieron cargar los PROYECTOS. Revisa consola (F12).");
     }
 
     try { await loadFuentesCatalog(); } catch (e) { console.warn("[SP] fuentes:", e.message); }
     try { await loadProgramasCatalog(); } catch (e) { console.warn("[SP] programas:", e.message); }
 
-    // primer cálculo completo
     refreshTotales();
   }
 

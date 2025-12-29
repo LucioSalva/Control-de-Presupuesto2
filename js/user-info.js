@@ -27,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const horaAcceso = localStorage.getItem("cp_login_time");
 
   // Mostrar usuario + hora
-  info.textContent = `${nombre} — Acceso: ${horaAcceso}`;
+  info.textContent = `${nombre} — Último Acceso: ${horaAcceso}`;
 
   // 🔥 BOTÓN PARA CERRAR SESIÓN
   if (btnLogout) {
